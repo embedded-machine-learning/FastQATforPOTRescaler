@@ -1,0 +1,133 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class BatchNormQuant(nn.Module):  # TODO QUANTIZE
+    def __init__(self, num_features, device=None, dtype=None):
+        factory_kwargs = {'device': device, 'dtype': dtype}
+        super(BatchNormQuant, self).__init__()
+
+        self.weight = torch.nn.Parameter(
+            torch.empty(num_features, **factory_kwargs))
+        self.bias = torch.nn.Parameter(
+            torch.empty(num_features, **factory_kwargs))
+        torch.nn.init.ones_(self.weight)
+        torch.nn.init.zeros_(self.bias)
+        self.register_buffer('n', torch.zeros(num_features))
+        self.register_buffer('t', torch.zeros(num_features))
+
+        # req from last cycle
+        self.register_buffer('sig', torch.ones(num_features))
+        self.register_buffer('mu', torch.zeros(num_features))
+
+        # from quant
+        self.quant = LinQuant(8)
+        self.register_buffer('inference_n', torch.ones(num_features))
+
+        # for weights
+        self.register_buffer('alpha', torch.ones(num_features))
+
+    def forward(self, x):
+        global running_exp
+
+        if self.training:
+            if self.training:
+                mu = x.mean([0, 2, 3])
+                sig = x.var([0, 2, 3], unbiased=False)
+                with torch.no_grad():
+                    self.mu = self.mu*0.9 + 0.1*mu.squeeze()
+                    self.sig = self.sig*0.9 + 0.1*sig.squeeze()
+            else:
+                mu = self.mu
+                sig = self.sig
+
+            xorig = x.clone()
+            # clamp to min 0 so n can't be negative
+            weights_used = self.weight.clamp(0)
+
+            x = (x-mu[None, :, None, None]) / \
+                (torch.sqrt(sig[None, :, None, None]+1e-5))
+            x = x*weights_used[None, :, None, None] + \
+                self.bias[None, :, None, None]
+
+            x = self.quant(x)
+            x = (x)/self.quant.desired_delta
+
+            with torch.no_grad():
+                n = (weights_used)/(torch.sqrt(sig+1e-5)
+                                    * self.quant.desired_delta)
+                self.n = torch.round(torch.log2(n))  # torch.round(n)
+                # print(torch.mean(self.n))
+                # + 1.0/self.quant.desired_delta
+                self.t = -mu*n + self.bias/self.quant.desired_delta
+                self.t = torch.round(self.t).clamp(-128, 127)
+
+            xorig = xorig * \
+                torch.exp2(self.n)[None, :, None, None] + \
+                self.t[None, :, None, None]
+            xorig = torch.round(xorig)
+            xorig = torch.clamp(xorig, -128, 127)
+
+            # print('diff',torch.max(torch.abs(x-xorig)))
+            # print('xorig',torch.max(torch.abs(xorig)))
+            # print('x',torch.max(torch.abs(xorig)))
+            x, xorig = switch.apply(x, xorig)
+            tmp = torch.round(torch.log2(self.quant.desired_delta))
+
+            running_exp = -6
+            
+            x = x*(2**running_exp)
+
+            # x = x/2**6
+            # x = x*torch.exp2(tmp)
+            return x
+        else:
+            mu = self.mu
+            sig = self.sig
+            # clamp to min 0 so n can't be negative
+            weights_used = self.weight.clamp(0)
+            n = (weights_used)/(torch.sqrt(sig+1e-5) * self.quant.desired_delta)
+            self.n = torch.round(torch.log2(n))
+            # + 1.0/self.quant.desired_delta
+            self.t = -mu*n + self.bias/self.quant.desired_delta
+            self.t = torch.round(self.t).clamp(-128, 127)
+
+            tmp_n = self.n+running_exp
+
+            self.inference_n = tmp_n
+
+            x = x*torch.exp2(tmp_n)[None, :, None, None] + \
+                self.t[None, :, None, None]
+            x = torch.round(x)
+            x = torch.clamp(x, -128, 127)
+
+            running_exp = -6
+            # running_exp=tmp = torch.round(torch.log2(self.quant.desired_delta))
+            return x
+
+    def get_weight_factor(self):
+        mom = 0.99
+        ones = torch.ones_like(self.alpha)
+        if self.training:
+            with torch.no_grad():
+                sig = (self.weight/self.quant.desired_delta).square() * \
+                    torch.exp2(-2*self.n)-1e-5
+                alpha = torch.sqrt(sig/self.sig)
+                # print(alpha)
+                alpha = alpha.masked_fill(torch.isnan(alpha), 1)
+                self.alpha = mom*self.alpha + (1-mom)*self.alpha*alpha
+                # self.alpha = self.alpha.clamp(0.5,2)
+                cond1 = self.alpha < 2
+                cond2 = self.alpha > 0.5
+                # cond = torch.logical_or(cond1,cond2)
+                # self.alpha = torch.where(cond,self.alpha,ones)
+                self.alpha = self.alpha.clamp(0.125, 8)
+                self.alpha = torch.where(cond1, self.alpha, self.alpha/2)
+                self.alpha = torch.where(cond2, self.alpha, self.alpha*2)
+                #update sig
+                self.sig = mom*self.sig + (1-mom)*self.sig*alpha.square()
+                self.sig = torch.where(cond1, self.sig, self.sig/2)
+                self.sig = torch.where(cond2, self.sig, self.sig*2)
+
+        return self.alpha[:, None, None, None]
+        # return ones[:, None,None, None]
