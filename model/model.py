@@ -2,10 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from model.layer import *
-from model.convolution import *
-from model.yolo import *
-
 class CAMSPlit(nn.Module):
     def __init__(self):
         super(CAMSPlit, self).__init__()

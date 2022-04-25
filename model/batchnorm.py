@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from model.quantizer    import *
+from model.utils        import*
+
 class BatchNormQuant(nn.Module):  # TODO QUANTIZE
     def __init__(self, num_features, device=None, dtype=None):
         factory_kwargs = {'device': device, 'dtype': dtype}
@@ -51,15 +54,15 @@ class BatchNormQuant(nn.Module):  # TODO QUANTIZE
                 self.bias[None, :, None, None]
 
             x = self.quant(x)
-            x = (x)/self.quant.desired_delta
+            x = (x)/self.quant.delta
 
             with torch.no_grad():
                 n = (weights_used)/(torch.sqrt(sig+1e-5)
-                                    * self.quant.desired_delta)
+                                    * self.quant.delta)
                 self.n = torch.round(torch.log2(n))  # torch.round(n)
                 # print(torch.mean(self.n))
                 # + 1.0/self.quant.desired_delta
-                self.t = -mu*n + self.bias/self.quant.desired_delta
+                self.t = -mu*n + self.bias/self.quant.delta
                 self.t = torch.round(self.t).clamp(-128, 127)
 
             xorig = xorig * \
@@ -72,7 +75,7 @@ class BatchNormQuant(nn.Module):  # TODO QUANTIZE
             # print('xorig',torch.max(torch.abs(xorig)))
             # print('x',torch.max(torch.abs(xorig)))
             x, xorig = switch.apply(x, xorig)
-            tmp = torch.round(torch.log2(self.quant.desired_delta))
+            tmp = torch.round(torch.log2(self.quant.delta))
 
             running_exp = -6
             
@@ -86,10 +89,10 @@ class BatchNormQuant(nn.Module):  # TODO QUANTIZE
             sig = self.sig
             # clamp to min 0 so n can't be negative
             weights_used = self.weight.clamp(0)
-            n = (weights_used)/(torch.sqrt(sig+1e-5) * self.quant.desired_delta)
+            n = (weights_used)/(torch.sqrt(sig+1e-5) * self.quant.delta)
             self.n = torch.round(torch.log2(n))
             # + 1.0/self.quant.desired_delta
-            self.t = -mu*n + self.bias/self.quant.desired_delta
+            self.t = -mu*n + self.bias/self.quant.delta
             self.t = torch.round(self.t).clamp(-128, 127)
 
             tmp_n = self.n+running_exp
@@ -110,8 +113,7 @@ class BatchNormQuant(nn.Module):  # TODO QUANTIZE
         ones = torch.ones_like(self.alpha)
         if self.training:
             with torch.no_grad():
-                sig = (self.weight/self.quant.desired_delta).square() * \
-                    torch.exp2(-2*self.n)-1e-5
+                sig = (self.weight/self.quant.delta).square() *torch.exp2(-2*self.n)-1e-5
                 alpha = torch.sqrt(sig/self.sig)
                 # print(alpha)
                 alpha = alpha.masked_fill(torch.isnan(alpha), 1)

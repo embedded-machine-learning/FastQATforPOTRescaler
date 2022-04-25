@@ -2,6 +2,10 @@
 # out/*
 # runs/*
 
+env
+data/MNIST/*
+data/cifar-10-batches-py/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
