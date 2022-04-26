@@ -1,3 +1,4 @@
+from pyexpat import model
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,17 +14,15 @@ class Start(nn.Module):
         super(Start,self).__init__()
         self.run=running_exp_init
     def forward(self,x):
-        global running_exp
-        running_exp = self.run
+        set_rexp(self.run)
         return x
         
 class Stop(nn.Module):
     def __init__(self) -> None:
         super(Stop,self).__init__()
     def forward(self,x):
-        global running_exp
-        if not self.train:
-            return x*(2**running_exp)
+        if not self.training:
+            x = x*(2**get_rexp())
         return x
 
 class SplitConvBlockQuant(nn.Module):
@@ -50,26 +49,24 @@ class BlockQuant(nn.Module):
         self.old_exp=0
 
     def forward(self, x):
-        global running_exp
-
         fact = self.bn.get_weight_factor()
 
         # set sigma and old exp
-        if self.train:
-            if self.first_old_exp:
-                self.old_exp=running_exp
-                self.first_old_exp=False
-            self.bn.sig = self.bn.sig*(2**(2*(running_exp-self.old_exp)))
-            self.old_exp=running_exp
+        #if self.training:
+        #    if self.first_old_exp:
+        #        self.old_exp=get_rexp()
+        #        self.first_old_exp=False
+        #    self.bn.sig = self.bn.sig*(2**(2*(get_rexp()-self.old_exp)))
+        #    self.old_exp=get_rexp()
 
         x = self.conv(x, fact)
         x = self.bn(x)
 
         x = self.prelu(x)
         if self.training:
-            x = x*(2**(-running_exp))
+            x = x*(2**(-get_rexp()))
             x = Round.apply(x)
-            x = x/(2**(-running_exp))
+            x = x/(2**(-get_rexp()))
         else:
             x = Round.apply(x)
         return x

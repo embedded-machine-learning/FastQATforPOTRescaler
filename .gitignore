@@ -5,6 +5,7 @@
 env
 data/MNIST/*
 data/cifar-10-batches-py/*
+.vscode
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

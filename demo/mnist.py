@@ -5,7 +5,7 @@ import torch
 import torchvision
 
 n_epochs = 3
-batch_size_train = 640
+batch_size_train = 64
 batch_size_test = 1000
 learning_rate = 0.01
 momentum = 0.5
@@ -34,16 +34,16 @@ test_loader = torch.utils.data.DataLoader(
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
-        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
+        self.conv1 = nn.Conv2d(1, 10, kernel_size=5,padding='same')
+        self.conv2 = nn.Conv2d(10, 20, kernel_size=5,padding='same')
         self.conv2_drop = nn.Dropout2d()
-        self.fc1 = nn.Linear(320, 50)
-        self.fc2 = nn.Linear(50, 10)
+        self.fc1 = nn.Linear(980, 124)
+        self.fc2 = nn.Linear(124, 10)
 
     def forward(self, x):
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
-        x = x.view(-1, 320)
+        x = x.view(-1, 980)
         x = F.relu(self.fc1(x))
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
@@ -55,6 +55,7 @@ import sys
 sys.path.append(os.getcwd())
 
 from model.layer import *
+from model.utils import *
 
 
 class Net2(nn.Module):
@@ -62,18 +63,16 @@ class Net2(nn.Module):
         super(Net2, self).__init__()
         self.start = Start(0)
         self.stop = Stop()
-        self.conv1 = BlockQuant(1, 10, 5,2)
-        self.conv2 = BlockQuant(10, 20, 5,2)
+        self.conv1 = BlockQuant(1, 10, 5,1)
+        self.conv2 = BlockQuant(10, 20, 5,1)
         self.conv2_drop = nn.Dropout2d()
         self.fc1 = nn.Linear(980, 124)
         self.fc2 = nn.Linear(124, 10)
 
     def forward(self, x):
-        global running_exp
-        running_exp =0
         x = self.start(x)
-        x = self.conv1(x)
-        x = self.conv2_drop(self.conv2(x))
+        x = F.max_pool2d(self.conv1(x),2)
+        x = F.max_pool2d(self.conv2_drop(self.conv2(x)),2)
         x = self.stop(x)
         #print(x.shape)
         x = x.view(-1, 980)

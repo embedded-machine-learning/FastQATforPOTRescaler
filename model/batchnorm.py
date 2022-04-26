@@ -31,8 +31,6 @@ class BatchNormQuant(nn.Module):  # TODO QUANTIZE
         self.register_buffer('alpha', torch.ones(num_features))
 
     def forward(self, x):
-        global running_exp
-
         if self.training:
             if self.training:
                 mu = x.mean([0, 2, 3])
@@ -40,6 +38,10 @@ class BatchNormQuant(nn.Module):  # TODO QUANTIZE
                 with torch.no_grad():
                     self.mu = self.mu*0.9 + 0.1*mu.squeeze()
                     self.sig = self.sig*0.9 + 0.1*sig.squeeze()
+                    if torch.any(torch.isnan(self.sig)):
+                        self.sig = sig
+                    if torch.any(torch.isnan(self.mu)):
+                        self.mu = mu
             else:
                 mu = self.mu
                 sig = self.sig
@@ -77,9 +79,9 @@ class BatchNormQuant(nn.Module):  # TODO QUANTIZE
             x, xorig = switch.apply(x, xorig)
             tmp = torch.round(torch.log2(self.quant.delta))
 
-            running_exp = -6
+            set_rexp(-6)
             
-            x = x*(2**running_exp)
+            x = x*(2**get_rexp())
 
             # x = x/2**6
             # x = x*torch.exp2(tmp)
@@ -95,7 +97,7 @@ class BatchNormQuant(nn.Module):  # TODO QUANTIZE
             self.t = -mu*n + self.bias/self.quant.delta
             self.t = torch.round(self.t).clamp(-128, 127)
 
-            tmp_n = self.n+running_exp
+            tmp_n = self.n+get_rexp()
 
             self.inference_n = tmp_n
 
@@ -104,7 +106,7 @@ class BatchNormQuant(nn.Module):  # TODO QUANTIZE
             x = torch.round(x)
             x = torch.clamp(x, -128, 127)
 
-            running_exp = -6
+            set_rexp(-6)
             # running_exp=tmp = torch.round(torch.log2(self.quant.desired_delta))
             return x
 

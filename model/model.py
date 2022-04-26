@@ -2,11 +2,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from model.layer import *
+from model.yolo import *
+
 class CAMSPlit(nn.Module):
     def __init__(self):
         super(CAMSPlit, self).__init__()
 
         self.layers = nn.Sequential(
+            Start(-7),
             BlockQuant(3, 16, 3, 2),
             BlockQuant(16, 32, 3, 2),
             BlockQuant(32, 64, 3, 2),
@@ -16,6 +20,7 @@ class CAMSPlit(nn.Module):
             BlockQuant(64, 64, 3, 1),
             BlockQuant(64, 64, 3, 1),
             Conv2dQuant(64, 36, 1, 1),
+            Stop(),
         )
 
         self.yololayer = YOLOLayer(
@@ -37,20 +42,14 @@ class CAMSPlit(nn.Module):
         # print(x.shape)
         yolo_out, out = [], []
 
-        global running_exp
-        running_exp = 0
-
         x = x * (2**7)
         x = torch.round(x)
-        if self.train:
+        if self.training:
             x = x/(2**7)
-        else:
-            running_exp = -7
 
         x = self.layers(x)
         # print(torch.max(x.abs()))
-        if not self.training:
-            x = x*(2**running_exp)
+        
         # print(x.shape)
 
         x = self.yololayer(x, img_size)

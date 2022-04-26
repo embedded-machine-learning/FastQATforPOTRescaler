@@ -86,7 +86,7 @@ class LinQuant(Quant):
 
         if abs == 0:
             self.delta = 2*1/(2.0**self.bits-1.0)
-            return LinQuant_.apply(x, abs+1.0, self.bits)
+            return LinQuant_.apply(x, abs+1.0, self.delta)
 
         if self.take_new:
             self.abs = abs
@@ -97,12 +97,11 @@ class LinQuant(Quant):
         self.delta = 2*self.abs/(2.0**self.bits-1.0)
         return LinQuant_.apply(x, self.abs, self.delta)
 
-class LinQuant2(nn.Module):
+class LinQuantExpScale(nn.Module):
     def __init__(self, bits) -> None:
-        super(LinQuant2, self).__init__()
+        super(LinQuantExpScale, self).__init__()
         self.bits = bits
         self.register_buffer('abs', torch.zeros(1))
-        self.desired_delta = 1
         self.take_new = True
 
     def forward(self, x, fact=1):
@@ -110,8 +109,8 @@ class LinQuant2(nn.Module):
         abs = torch.max(torch.abs(x.detach().view(-1)))
 
         if abs == 0:
-            self.desired_delta = 2*1/(2.0**self.bits-1.0)
-            return LinQuant_.apply(x, abs+1.0, self.bits)
+            self.delta = 2*1/(2.0**self.bits-1.0)
+            return LinQuant_.apply(x, abs+1.0, self.delta)
 
         if self.take_new:
             self.abs = abs
@@ -119,6 +118,6 @@ class LinQuant2(nn.Module):
         elif self.training:
             self.abs = 0.89*self.abs + 0.01*expQuant.apply(self.abs) + 0.1*abs
 
-        self.desired_delta = 2*expQuant.apply(self.abs)/(2.0**self.bits-1.0)
-        return LinQuant_.apply(x, expQuant.apply(self.abs), self.bits)
+        self.delta = 2*expQuant.apply(self.abs)/(2.0**self.bits-1.0)
+        return LinQuant_.apply(x, expQuant.apply(self.abs), self.delta)
 

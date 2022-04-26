@@ -21,3 +21,13 @@ class switch(torch.autograd.Function):
     @staticmethod
     def backward(self, out1: torch.Tensor, out2: torch.Tensor):
         return out1.detach(), out2.detach()
+
+running_exponent=0
+
+def set_rexp(val):
+    global running_exponent
+    running_exponent = val
+def get_rexp():
+    global running_exponent
+    return running_exponent
+
