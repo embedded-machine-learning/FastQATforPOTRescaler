@@ -15,6 +15,10 @@ class Start(nn.Module):
         self.run=running_exp_init
     def forward(self,x):
         set_rexp(self.run)
+        x = x*(2**(-get_rexp()))
+        x = Round.apply(x)
+        if self.training:
+            x = x/(2**(-get_rexp()))
         return x
         
 class Stop(nn.Module):

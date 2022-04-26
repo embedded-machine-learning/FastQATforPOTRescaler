@@ -19,21 +19,12 @@ class Conv2dQuant(nn.Conv2d):
         self.take_new = True
 
     def forward(self, input: torch.Tensor, factor=1) -> torch.Tensor:
-        with torch.no_grad():
-            if self.training:
-                # if self.take_new:
-                #     self.first_max=torch.max(torch.abs(self.weight.data.view(-1)))
-                #     print(self.first_max)
-                #     self.take_new=False
-
-                # self.weight.data = self.weight.data/torch.max(torch.abs(self.weight.data.view(-1)))
-                # print(self.weight.view(-1).var([0],unbiased=False))
-                pass
+            # tmp = self.quantw(self.weight*factor)
         tmp = self.quantw(self.weight*factor)
         # print(torch.log2(self.quantw.desired_delta))
         # ~ 2**-9 is the scaling factor
         if not self.training:
-            set_rexp(torch.log2(self.quantw.delta)+get_rexp())
+            set_rexp(torch.round(torch.log2(self.quantw.delta))+get_rexp())
             tmp = tmp/self.quantw.delta
             self.used_weights = tmp
         if torch.any(torch.isnan(tmp)):

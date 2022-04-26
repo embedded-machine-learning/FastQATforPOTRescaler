@@ -116,8 +116,8 @@ class LinQuantExpScale(nn.Module):
             self.abs = abs
             self.take_new = False
         elif self.training:
-            self.abs = 0.89*self.abs + 0.01*expQuant.apply(self.abs) + 0.1*abs
+            self.abs = 0.89*self.abs + 0.01*expQuant.apply(self.abs/(2.0**self.bits-1.0))*(2.0**self.bits-1.0) + 0.1*abs
 
-        self.delta = 2*expQuant.apply(self.abs)/(2.0**self.bits-1.0)
+        self.delta = 2*expQuant.apply(self.abs/(2.0**self.bits-1.0))
         return LinQuant_.apply(x, expQuant.apply(self.abs), self.delta)
 
