@@ -66,20 +66,20 @@ class Net2(nn.Module):
         self.conv1 = BlockQuant(1, 10, 5,1)
         self.conv2 = BlockQuant(10, 20, 5,1)
         self.conv2_drop = nn.Dropout2d()
-        self.fc1 = nn.Linear(980, 124)
-        self.fc2 = nn.Linear(124, 10)
+        self.fc1 = LinearBN(980, 124) 
+        self.fc2 = LinQuant(124, 10)
 
     def forward(self, x):
         x = self.start(x)
         x = F.max_pool2d(self.conv1(x),2)
         x = F.max_pool2d(self.conv2_drop(self.conv2(x)),2)
-        x = self.stop(x)
         #print(x.shape)
         x = x.view(-1, 980)
         #print(x.shape)
         x = F.relu(self.fc1(x))
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
+        x = self.stop(x)
         return F.log_softmax(x)
 
 
@@ -139,3 +139,4 @@ def test():
 for epoch in range(1, n_epochs + 1):
     train(epoch)
     test()
+

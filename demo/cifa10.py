@@ -8,7 +8,7 @@ transform = transforms.Compose(
     [transforms.ToTensor(),
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-batch_size = 200
+batch_size = 40
 
 trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
                                         download=True, transform=transform)
@@ -36,24 +36,24 @@ from model.layer import *
 class Net(nn.Module):
     def __init__(self):
         super().__init__()
-        self.start = Start(0)
+        self.start = Start(-8)
         self.stop = Stop()
         self.conv1 = BlockQuant(3, 6, 5,2)
         #self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = BlockQuant(6, 16, 5,2)
         self.conv3 = BlockQuant(16, 32, 5,2)
-        self.fc1 = nn.Linear(512, 120)
-        self.fc3 = nn.Linear(120, 10)
+        self.fc1 = LinearBN(512, 120)
+        self.fc3 = LinearBN(120, 10)
 
     def forward(self, x):
         x = self.start(x)
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
-        x = self.stop(x)
         x = torch.flatten(x, 1) # flatten all dimensions except batch
         x = F.relu(self.fc1(x))
         x = self.fc3(x)
+        x = self.stop(x)
         return x
 
 
@@ -69,7 +69,7 @@ optimizer = optim.Adam(net.parameters(),lr=0.001)
 
 
 
-for epoch in range(20):  # loop over the dataset multiple times
+for epoch in range(10):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
@@ -96,6 +96,7 @@ print('Finished Training')
 correct = 0
 total = 0
 # since we're not training, we don't need to calculate the gradients for our outputs
+net.eval()
 with torch.no_grad():
     for data in testloader:
         images, labels = data
