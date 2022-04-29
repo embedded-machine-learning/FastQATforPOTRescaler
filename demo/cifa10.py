@@ -43,7 +43,7 @@ class Net(nn.Module):
         self.conv2 = BlockQuant(6, 16, 5,2)
         self.conv3 = BlockQuant(16, 32, 5,2)
         self.fc1 = LinearBN(512, 120)
-        self.fc3 = LinearBN(120, 10)
+        self.fc3 = LinQuant(120, 10)
 
     def forward(self, x):
         x = self.start(x)
@@ -64,8 +64,8 @@ net = net.to(device)
 import torch.optim as optim
 
 criterion = nn.CrossEntropyLoss()
-#optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-optimizer = optim.Adam(net.parameters(),lr=0.001)
+optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+#optimizer = optim.Adam(net.parameters(),lr=0.001)
 
 
 
