@@ -42,11 +42,6 @@ class CAMSPlit(nn.Module):
         # print(x.shape)
         yolo_out, out = [], []
 
-        x = x * (2**7)
-        x = torch.round(x)
-        if self.training:
-            x = x/(2**7)
-
         x = self.layers(x)
         # print(torch.max(x.abs()))
         
