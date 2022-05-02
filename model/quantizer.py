@@ -101,12 +101,18 @@ class LinQuantExpScale(nn.Module):
         self.bits = bits
         self.register_buffer('abs', torch.zeros(1))
         self.take_new = True
+        self.size = []
 
     def forward(self, x, fact=1):
         x = x*fact
-        abs = torch.max(torch.abs(x.detach().view(-1)))
+        if len(self.size)==0:
+            self.size = list(x.shape)
+            self.size[1]=-1
+            for i in range(2,len(self.size)):
+                self.size[i]=1
+        abs = torch.max(torch.abs(x.detach().view(self.size)),dim=(1),keepdim=True).values
 
-        if abs == 0:
+        if torch.any(abs == 0):
             self.delta = 2*1/(2.0**self.bits-1.0)
             return LinQuant_.apply(x, abs+1.0, self.delta)
 

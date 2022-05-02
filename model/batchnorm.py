@@ -105,7 +105,7 @@ class BatchNorm2dQuant(nn.Module):  # TODO QUANTIZE
             self.t = -mu*n + self.bias/self.quant.delta
             self.t = torch.round(self.t).clamp(-128, 127)
 
-            tmp_n = self.n+get_rexp()
+            tmp_n = self.n+get_rexp().view(-1)
 
             self.inference_n = tmp_n
 
@@ -242,7 +242,7 @@ class BatchNormQuant(nn.Module):  # TODO QUANTIZE
             self.t = -mu*n + self.bias/self.quant.delta
             self.t = torch.round(self.t).clamp(-128, 127)
 
-            tmp_n = self.n+get_rexp()
+            tmp_n = self.n+get_rexp().view(-1)
 
             self.inference_n = tmp_n
 

@@ -28,10 +28,17 @@ class Start(nn.Module):
 class Stop(nn.Module):
     def __init__(self) -> None:
         super(Stop, self).__init__()
-
+        self.size = []
     def forward(self, x):
         if not self.training:
-            x = x/(2**-get_rexp())
+            if len(self.size)==0:
+                self.size = list(x.shape)
+                self.size[0]=1
+                self.size[1]=-1
+                for i in range(2,len(self.size)):
+                    self.size[i]=1
+
+            x = x/(2**-get_rexp().view(self.size))
         return x
 
 
