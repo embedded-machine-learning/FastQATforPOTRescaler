@@ -29,6 +29,8 @@ class Conv2dQuant(nn.Conv2d):
             set_rexp(torch.round(torch.log2(self.quantw.delta))+get_rexp())
             tmp = tmp/self.quantw.delta
             self.used_weights = tmp
+        # else:
+        #     tmp=tmp/factor
         if torch.any(torch.isnan(tmp)):
             print(torch.max(torch.abs(self.weight.data.view(-1))))
             print(factor)

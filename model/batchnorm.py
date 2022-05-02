@@ -3,8 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from model.quantizer    import *
-from model.utils        import*
+from model.quantizer import *
+from model.utils import*
+
 
 class BatchNorm2dQuant(nn.Module):  # TODO QUANTIZE
     def __init__(self, num_features, device=None, dtype=None):
@@ -51,6 +52,9 @@ class BatchNorm2dQuant(nn.Module):  # TODO QUANTIZE
             # clamp to min 0 so n can't be negative
             weights_used = self.weight.clamp(0)
 
+            # x = (x-mu[None, :, None, None]) / \
+            #     (torch.sqrt(sig[None, :, None, None]+1e-5)) * \
+            #     self.alpha[None, :, None, None]
             x = (x-mu[None, :, None, None]) / \
                 (torch.sqrt(sig[None, :, None, None]+1e-5))
             x = x*weights_used[None, :, None, None] + \
@@ -71,6 +75,9 @@ class BatchNorm2dQuant(nn.Module):  # TODO QUANTIZE
             xorig = xorig * \
                 torch.exp2(self.n)[None, :, None, None] + \
                 self.t[None, :, None, None]
+            # xorig = xorig * self.alpha[None, :, None, None]* \
+            #     torch.exp2(self.n)[None, :, None, None] + \
+            #     self.t[None, :, None, None]
             xorig = torch.round(xorig)
             xorig = torch.clamp(xorig, -128, 127)
 
@@ -81,7 +88,7 @@ class BatchNorm2dQuant(nn.Module):  # TODO QUANTIZE
             tmp = torch.round(torch.log2(self.quant.delta))
 
             set_rexp(-6)
-            
+
             x = x*(2**get_rexp())
 
             # x = x/2**6
@@ -116,13 +123,14 @@ class BatchNorm2dQuant(nn.Module):  # TODO QUANTIZE
         ones = torch.ones_like(self.alpha)
         if self.training:
             with torch.no_grad():
-                sig = (self.weight/self.quant.delta).square() *torch.exp2(-2*self.n)-1e-5
+                sig = (self.weight/self.quant.delta).square() * \
+                    torch.exp2(-2*self.n)-1e-5
                 alpha = torch.sqrt(sig/self.sig)
                 # print(alpha)
                 alpha = alpha.masked_fill(torch.isnan(alpha), 1)
                 self.alpha = mom*self.alpha + (1-mom)*self.alpha*alpha
                 # self.alpha = self.alpha.clamp(0.5,2)
-                bounding_fact=np.sqrt(2)
+                bounding_fact = np.sqrt(2)
                 cond1 = self.alpha < bounding_fact
                 cond2 = self.alpha > 1/bounding_fact
                 # cond = torch.logical_or(cond1,cond2)
@@ -130,7 +138,7 @@ class BatchNorm2dQuant(nn.Module):  # TODO QUANTIZE
                 self.alpha = self.alpha.clamp(0.125, 8)
                 self.alpha = torch.where(cond1, self.alpha, self.alpha/2)
                 self.alpha = torch.where(cond2, self.alpha, self.alpha*2)
-                #update sig
+                # update sig
                 self.sig = mom*self.sig + (1-mom)*self.sig*alpha.square()
                 self.sig = torch.where(cond1, self.sig, self.sig/4)
                 self.sig = torch.where(cond2, self.sig, self.sig*4)
@@ -217,7 +225,7 @@ class BatchNormQuant(nn.Module):  # TODO QUANTIZE
             tmp = torch.round(torch.log2(self.quant.delta))
 
             set_rexp(-6)
-            
+
             x = x*(2**get_rexp())
 
             # x = x/2**6
@@ -252,13 +260,14 @@ class BatchNormQuant(nn.Module):  # TODO QUANTIZE
         ones = torch.ones_like(self.alpha)
         if self.training:
             with torch.no_grad():
-                sig = (self.weight/self.quant.delta).square() *torch.exp2(-2*self.n)-1e-5
+                sig = (self.weight/self.quant.delta).square() * \
+                    torch.exp2(-2*self.n)-1e-5
                 alpha = torch.sqrt(sig/self.sig)
                 # print(alpha)
                 alpha = alpha.masked_fill(torch.isnan(alpha), 1)
                 self.alpha = mom*self.alpha + (1-mom)*self.alpha*alpha
                 # self.alpha = self.alpha.clamp(0.5,2)
-                bounding_fact=np.sqrt(2)
+                bounding_fact = np.sqrt(2)
                 cond1 = self.alpha < bounding_fact
                 cond2 = self.alpha > 1/bounding_fact
                 # cond = torch.logical_or(cond1,cond2)
@@ -266,7 +275,7 @@ class BatchNormQuant(nn.Module):  # TODO QUANTIZE
                 self.alpha = self.alpha.clamp(0.125, 8)
                 self.alpha = torch.where(cond1, self.alpha, self.alpha/2)
                 self.alpha = torch.where(cond2, self.alpha, self.alpha*2)
-                #update sig
+                # update sig
                 self.sig = mom*self.sig + (1-mom)*self.sig*alpha.square()
                 self.sig = torch.where(cond1, self.sig, self.sig/4)
                 self.sig = torch.where(cond2, self.sig, self.sig*4)

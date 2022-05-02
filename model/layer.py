@@ -31,7 +31,7 @@ class Stop(nn.Module):
 
     def forward(self, x):
         if not self.training:
-            x = x*(2**get_rexp())
+            x = x/(2**-get_rexp())
         return x
 
 
