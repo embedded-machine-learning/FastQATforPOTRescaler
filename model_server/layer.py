@@ -9,6 +9,7 @@ from model.convolution import *
 from model.batchnorm import *
 from model.utils import *
 from model.linear import *
+from model.batchnorm_fixed import BatchNorm2dQuantFixed
 
 
 class Start(nn.Module):
@@ -29,6 +30,8 @@ class Stop(nn.Module):
     def __init__(self) -> None:
         super(Stop, self).__init__()
         self.size = []
+        self.register_buffer('exponent', torch.ones(1))
+
     def forward(self, x):
         if not self.training:
             if len(self.size)==0:
@@ -39,6 +42,7 @@ class Stop(nn.Module):
                     self.size[i]=1
 
             x = x/(2**-get_rexp().view(self.size))
+            self.exponent = -get_rexp().view(self.size)
         return x
 
 
@@ -54,22 +58,6 @@ class Conv2dBN(nn.Module):
         fact = self.bn.get_weight_factor()
         x = self.conv(x, fact)
         x = self.bn(x)
-        return x
-
-import model.batchnorm2
-import model.convolution2
-class Conv2dBN2(nn.Module):
-    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:
-        super(Conv2dBN, self).__init__()
-
-        self.conv =  model.convolution2.Conv2dQuant(layers_in, layers_out, kernel_size, stride, padding=int(
-            np.floor(kernel_size/2)), groups=groups)
-        self.bn = model.batchnorm2.BatchNorm2dQuant(layers_out)
-
-    def forward(self, x):
-        fact = self.bn.get_weight_factor()
-        x = self.conv(x, fact)
-        x = self.bn(x, self.conv.quantw.delta)
         return x
 
 
@@ -94,6 +82,19 @@ class SplitConvBlockQuant(nn.Module):
         self.depthwise = BlockQuant(
             layers_in, layers_in, kernel_size, stride, layers_in)
         self.pointwise = BlockQuant(layers_in, layers_out, 1, 1, 1)
+
+    def forward(self, x):
+        x = self.depthwise(x)
+        x = self.pointwise(x)
+        return x
+
+class SplitConvBlockQuant2(nn.Module):
+    def __init__(self, layers_in, layers_out, kernel_size, stride) -> None:
+        super(SplitConvBlockQuant2, self).__init__()
+
+        self.depthwise = BlockQuant2(
+            layers_in, layers_in, kernel_size, stride, layers_in)
+        self.pointwise = BlockQuant2(layers_in, layers_out, 1, 1, 1)
 
     def forward(self, x):
         x = self.depthwise(x)
@@ -140,9 +141,9 @@ class BlockQuant2(nn.Module):
     def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:
         super(BlockQuant2, self).__init__()
 
-        self.conv = model.convolution2.Conv2dQuant(layers_in, layers_out, kernel_size, stride, padding=int(
+        self.conv = Conv2dQuant2(layers_in, layers_out, kernel_size, stride, padding=int(
             np.floor(kernel_size/2)), groups=groups)
-        self.bn = model.batchnorm2.BatchNorm2dQuant(layers_out)
+        self.bn = BatchNorm2dQuant2(layers_out)
         self.prelu = PReLUQuant(layers_out)
 
         self.first_old_exp = True
@@ -171,6 +172,42 @@ class BlockQuant2(nn.Module):
             x = Round.apply(x)
         return x
 
+from model.batchnorm_fixed import *
+
+class BlockQuant3(nn.Module):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:
+        super(BlockQuant3, self).__init__()
+
+        self.conv = Conv2dQuant2(layers_in, layers_out, kernel_size, stride, padding=int(
+            np.floor(kernel_size/2)), groups=groups)
+        self.bn = BatchNorm2dQuantFixed(layers_out)
+        self.prelu = nn.LeakyReLU()
+
+        self.first_old_exp = True
+        self.old_exp = 0
+
+    def forward(self, x):
+        fact = self.bn.get_weight_factor(self.conv.quantw.delta)
+
+        # set sigma and old exp
+        # if self.training:
+        #    if self.first_old_exp:
+        #        self.old_exp=get_rexp()
+        #        self.first_old_exp=False
+        #    self.bn.sig = self.bn.sig*(2**(2*(get_rexp()-self.old_exp)))
+        #    self.old_exp=get_rexp()
+
+        x = self.conv(x, fact)
+        x = self.bn(x, self.conv.quantw.delta)
+
+        x = self.prelu(x)
+        if self.training:
+            x = x*(2**(-get_rexp()))
+            x = Round.apply(x)
+            x = x/(2**(-get_rexp()))
+        else:
+            x = Round.apply(x)
+        return x
 
 class Block(nn.Module):
     def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:
@@ -179,7 +216,7 @@ class Block(nn.Module):
         self.conv = nn.Conv2d(layers_in, layers_out, kernel_size, stride, padding=int(
             np.floor(kernel_size/2)), groups=groups)
         self.bn = nn.BatchNorm2d(layers_out)
-        self.prelu = nn.PReLU(layers_out)
+        self.prelu = nn.ReLU()
 
     def forward(self, x):
 
@@ -187,4 +224,18 @@ class Block(nn.Module):
         x = self.bn(x)
         x = self.prelu(x)
 
+        return x
+
+
+class SplitBlock(nn.Module):
+    def __init__(self, layers_in, layers_out, kernel_size, stride) -> None:
+        super(SplitBlock, self).__init__()
+
+        self.depthwise = Block(
+            layers_in, layers_in, kernel_size, stride, layers_in)
+        self.pointwise = Block(layers_in, layers_out, 1, 1, 1)
+
+    def forward(self, x):
+        x = self.depthwise(x)
+        x = self.pointwise(x)
         return x
