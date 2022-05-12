@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.nn.common_types import _size_1_t, _size_2_t, _size_3_t
 from typing import Union
 
-from model.quantizer import *
+from model_server.quantizer import *
 from model.utils import *
 
 
@@ -14,7 +14,7 @@ class Conv2dQuant(nn.Conv2d):
         super(Conv2dQuant, self).__init__(in_channels, out_channels, kernel_size,
                                           stride, padding, dilation, groups, bias, padding_mode, device, dtype)
 
-        self.quantw = LinQuantExpScale(8)
+        self.quantw = LinQuantExpScale(8,(out_channels,1,1,1))
         self.register_buffer('used_weights', torch.zeros_like(self.weight))
         self.first_max = []
         self.take_new = True
@@ -37,13 +37,13 @@ class Conv2dQuant(nn.Conv2d):
 
 
 class ChannelLinQuant(nn.Module):
-    def __init__(self, bits) -> None:
+    def __init__(self, bits, shape) -> None:
         super(ChannelLinQuant, self).__init__()
         self.bits = bits
-        self.register_buffer('abs', torch.zeros(1))
+        self.register_buffer('abs', torch.zeros(shape))
         self.take_new = True
         self.size = []
-        self.register_buffer('delta', torch.ones(1))
+        self.register_buffer('delta', torch.ones(shape))
 
     def forward(self, x, fact=1):
         if len(self.size) == 0:
@@ -74,7 +74,7 @@ class Conv2dQuant2(nn.Conv2d):
         super(Conv2dQuant2, self).__init__(in_channels, out_channels, kernel_size,
                                           stride, padding, dilation, groups, bias, padding_mode, device, dtype)
 
-        self.quantw = ChannelLinQuant(8)
+        self.quantw = ChannelLinQuant(8,(out_channels,1,1,1))
         self.register_buffer('used_weights', torch.zeros_like(self.weight))
         self.first_max = []
         self.take_new = True

@@ -14,6 +14,7 @@ from utils.parse_config import *
 import torch.nn.functional as F
 
 from model.model import *
+from model_server.model import *
 
 wdir = 'weights' + os.sep  # weights dir
 outdir = 'out' + os.sep
@@ -99,7 +100,8 @@ def train():
     
     # model = model.model_quant.CAMSPlit().to(device)
 
-    model = CamtadNet_float().to(device)
+    # model = CamtadNet_float().to(device)
+    model = CamtadNetFixed().to(device)
     model.setquant(0)
 
     # Optimizer

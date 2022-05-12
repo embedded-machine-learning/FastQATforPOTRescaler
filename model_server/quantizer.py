@@ -76,8 +76,10 @@ class LinQuant(Quant):
     def __init__(self, bits) -> None:
         super(LinQuant, self).__init__()
         self.bits = bits
-        self.register_buffer('abs', torch.zeros(1))
+        self.register_buffer('abs', torch.tensor(0))
         self.take_new = True
+        self.delta = torch.tensor(0)
+
 
     def forward(self, x):
         abs = torch.max(torch.abs(x.detach().view(-1)))
@@ -96,10 +98,11 @@ class LinQuant(Quant):
         return LinQuant_.apply(x, self.abs, self.delta)
 
 class LinQuantExpScale(nn.Module):
-    def __init__(self, bits) -> None:
+    def __init__(self, bits, shape) -> None:
         super(LinQuantExpScale, self).__init__()
         self.bits = bits
-        self.register_buffer('abs', torch.zeros(1))
+        self.register_buffer('abs', torch.zeros(shape))
+        self.delta = torch.ones(shape)
         self.take_new = True
         self.size = []
 

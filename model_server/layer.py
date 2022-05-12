@@ -3,13 +3,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from model.activation import PReLUQuant
+from model_server.activation import PReLUQuant
 
-from model.convolution import *
-from model.batchnorm import *
+from model_server.convolution import *
 from model.utils import *
-from model.linear import *
-from model.batchnorm_fixed import BatchNorm2dQuantFixed
+from model_server.linear import *
+from model_server.batchnorm_fixed import *
 
 
 class Start(nn.Module):
@@ -27,10 +26,10 @@ class Start(nn.Module):
 
 
 class Stop(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, shape) -> None:
         super(Stop, self).__init__()
         self.size = []
-        self.register_buffer('exponent', torch.ones(1))
+        self.register_buffer('exponent', torch.ones(shape))
 
     def forward(self, x):
         if not self.training:
@@ -171,8 +170,6 @@ class BlockQuant2(nn.Module):
         else:
             x = Round.apply(x)
         return x
-
-from model.batchnorm_fixed import *
 
 class BlockQuant3(nn.Module):
     def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:

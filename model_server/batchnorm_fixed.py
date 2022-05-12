@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from model.quantizer import *
+from model_server.quantizer import *
 from model.utils import*
 
 

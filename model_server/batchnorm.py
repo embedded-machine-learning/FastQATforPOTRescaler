@@ -342,8 +342,6 @@ class BatchNorm2dQuant2(nn.Module):  # TODO QUANTIZE
         # return ones[:, None,None, None]
 
 
-
-
 class BatchNormQuant(nn.Module):  # TODO QUANTIZE
     def __init__(self, num_features, device=None, dtype=None):
         factory_kwargs = {'device': device, 'dtype': dtype}
