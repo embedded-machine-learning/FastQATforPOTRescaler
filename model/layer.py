@@ -13,14 +13,14 @@ from model.convolution import *
 class Start(nn.Module):
     def __init__(self, running_exp_init) -> None:
         super(Start, self).__init__()
-        self.register_buffer('run',torch.tensor(running_exp_init))
+        self.register_buffer('run',torch.tensor([running_exp_init]))
 
     def forward(self, x):
         rexp=self.run
-        x = x*(2**(-rexp))
+        x = x*(2**(-rexp[None,:,None,None]))
         x = Round.apply(x)
         if self.training:
-            x = x/(2**(-rexp))
+            x = x/(2**(-rexp[None,:,None,None]))
         return (x, rexp)
 
 
@@ -31,14 +31,7 @@ class Stop(nn.Module):
     def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
         x , rexp = invals
         if not self.training:
-            if len(self.size)==0:
-                self.size = list(x.shape)
-                self.size[0]=1
-                self.size[1]=-1
-                for i in range(2,len(self.size)):
-                    self.size[i]=1
-
-            x = x/(2**-rexp.view(self.size))
+            x = x/(2**-rexp[None,:,None,None])
         return x
 
 
@@ -56,7 +49,7 @@ class BlockQuant3(nn.Module):
         self.old_exp = 0
 
     def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
-        x , rexp = invals
+        
         fact = self.bn.get_weight_factor()
 
         # set sigma and old exp
@@ -67,14 +60,16 @@ class BlockQuant3(nn.Module):
         #    self.bn.sig = self.bn.sig*(2**(2*(get_rexp()-self.old_exp)))
         #    self.old_exp=get_rexp()
 
-        x = self.conv(x, fact)
+        x = self.conv(invals, fact)
         x = self.bn(x, self.conv.quantw.delta)
-
+       
+        x , rexp = x
         x = self.prelu(x)
+
         if self.training:
-            x = x*(2**(-rexp()))
+            x = x*(2**(-rexp[None,:,None,None]))
             x = Round.apply(x)
-            x = x/(2**(-rexp()))
+            x = x/(2**(-rexp[None,:,None,None]))
         else:
             x = Round.apply(x)
         return x,rexp

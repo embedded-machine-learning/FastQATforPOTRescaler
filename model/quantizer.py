@@ -104,6 +104,7 @@ class LinQuant(Quant):
                 self.abs = 0.89*self.abs + 0.01 * (self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0) + 0.1*abs
 
             self.delta = 2*(self.abs/(2.0**self.bits-1.0))
+
         x = x*fact
         return LinQuant_.apply(x, self.abs, self.delta)
 

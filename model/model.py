@@ -17,7 +17,7 @@ class CamtadNetFixed(nn.Module):
             BlockQuant3(64, 64, 3, 1),
             BlockQuant3(64, 64, 3, 1),
             BlockQuant3(64, 64, 3, 1),
-            Conv2dExpLayerQuant(64, 36, 1, 1),
+            Conv2dExpLayerQuantNormWeights(64, 36, 1, 1),
             Stop()
         )
 

@@ -4,16 +4,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from model_old.quantizer import *
-from model_old.utils import*
+from model.quantizer import *
+from model.utils import*
 
 
 class BatchNorm2dQuantFixed(nn.Module): 
     def __init__(self, num_features, device=None, dtype=None):
+        factory_kwargs = {'device': device, 'dtype': dtype}
         super(BatchNorm2dQuantFixed, self).__init__()
 
-        self.register_parameter('weight',torch.ones(num_features))
-        self.register_parameter('bias',torch.zeros(num_features))
+        self.weight = torch.nn.Parameter(
+            torch.empty(num_features, **factory_kwargs))
+        self.bias = torch.nn.Parameter(
+            torch.empty(num_features, **factory_kwargs))
+        torch.nn.init.ones_(self.weight)
+        torch.nn.init.zeros_(self.bias)
         self.register_buffer('n', torch.zeros(num_features))
         self.register_buffer('t', torch.zeros(num_features))
 
@@ -30,21 +35,21 @@ class BatchNorm2dQuantFixed(nn.Module):
         # for weights
         self.register_buffer('alpha', torch.ones(num_features))
 
-    def calculate_n(self,sig,gamma,delta_in,delta_out,rexp) -> Tuple[torch.Tensor,torch.Tensor]:
-        n = delta_in.view(-1)/delta_out.view(-1)*gamma.view(-1)/torch.sqrt(sig+1e-5)
+    def calculate_n(self,sig,gamma,delta_in,delta_out,rexp) -> Tuple[torch.Tensor,torch.Tensor]:#
+        n = delta_in.view(-1)/delta_out.view(-1)*gamma.view(-1)/torch.sqrt(sig.view(-1)+1e-5)
         nr = torch.median(torch.round(torch.log2(n)))*torch.ones_like(torch.round(torch.log2(n)))
-        return nr,nr+rexp
+        return nr,nr+rexp.view(-1)
 
     def calculate_t(self,sig,mu,gamma,beta,delta_out) -> torch.Tensor:
-        t =  -mu*(gamma)/(torch.sqrt(sig+1e-5) * delta_out) + beta/delta_out
+        t =  -mu.view(-1)*(gamma.view(-1))/(torch.sqrt(sig.view(-1)+1e-5) * delta_out.view(-1)) + beta.view(-1)/delta_out.view(-1)
         t = torch.round(t).clamp(-128, 127)
         return t
 
     def calculate_alpha(self,delta_in)-> None:
          with torch.no_grad():
             mom = 0.99
-            sig = (self.weight*delta_in.view(-1)/self.quant.delta).square() * torch.exp2(-2*self.n)-1e-5
-            alpha = torch.sqrt(sig/self.sig)
+            sig = (self.weight.view(-1)*delta_in.view(-1)/self.quant.delta.view(-1)).square() * torch.exp2(-2*self.n.view(-1))-1e-5
+            alpha = torch.sqrt(sig.view(-1)/self.sig.view(-1))
             alpha = alpha.masked_fill(torch.isnan(alpha), 1)
             old_alpha = self.alpha
             self.alpha = mom*self.alpha + (1-mom)*alpha*self.alpha
@@ -87,25 +92,24 @@ class BatchNorm2dQuantFixed(nn.Module):
             x = (x)/self.quant.delta
 
             with torch.no_grad():
-                self.n, self.inference_n = self.calculate_n(sig,weights_used,in_quant,self.quant.delta,rexp)
+                self.n, self.inference_n = self.calculate_n(sig=sig,gamma=weights_used,delta_in=in_quant,delta_out=self.quant.delta,rexp=rexp)
                 self.t = self.calculate_t(sig,mu,weights_used,self.bias,self.quant.delta)
-                
-
-            xorig = xorig * torch.exp2(self.n)[None, :, None, None]/in_quant.view(-1)[None, :, None, None] + self.t[None, :, None, None]
-            xorig = torch.round(xorig)
-            xorig = torch.clamp(xorig, -128, 127)
+                xorig = xorig * torch.exp2(self.n)[None, :, None, None]/in_quant.view(-1)[None, :, None, None] + self.t[None, :, None, None]
+                xorig = torch.round(xorig)
+                xorig = torch.clamp(xorig, -128, 127)
 
             x, xorig = switch.apply(x, xorig)
             tmp = torch.round(torch.log2(self.quant.delta))
 
-            rexp=-6*torch.ones_like(rexp)
 
-            x = x*(2**rexp)
+            rexp=-6.0*torch.ones_like(rexp)
+
+            x = x*(2**rexp[None,:,None,None])
 
 
             # x = x/2**6
             # x = x*torch.exp2(tmp)
-            self.calculate_alpha()
+            self.calculate_alpha(in_quant)
             return x, rexp
         else:
             with torch.no_grad():
@@ -114,7 +118,7 @@ class BatchNorm2dQuantFixed(nn.Module):
                 # clamp to min 0 so n can't be negative
                 weights_used = self.weight.clamp(0)
 
-                self.n, self.inference_n = self.calculate_n(sig,weights_used,in_quant,self.quant.delta,rexp)
+                self.n, self.inference_n = self.calculate_n(sig=sig,gamma=weights_used,delta_in=in_quant,delta_out=self.quant.delta,rexp=rexp)
                 self.t = self.calculate_t(sig,mu,weights_used,self.bias,self.quant.delta)
 
                 x = x*torch.exp2(self.inference_n)[None, :, None, None] + self.t[None, :, None, None]
@@ -123,7 +127,7 @@ class BatchNorm2dQuantFixed(nn.Module):
 
                 rexp=-6*torch.ones_like(rexp)
             # running_exp=tmp = torch.round(torch.log2(self.quant.desired_delta))
-            return x
+            return x, rexp
 
         
     def get_weight_factor(self):
