@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from torch.nn.common_types import _size_1_t, _size_2_t, _size_3_t
 from typing import Union
 
-from model.quantizer import *
-from model.utils import *
+from model_old.quantizer import *
+from model_old.utils import *
 
 
 class LinQuant(nn.Linear):

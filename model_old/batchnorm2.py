@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from model.quantizer import *
-from model.utils import*
+from model_old.quantizer import *
+from model_old.utils import*
 
 get_weight_factor_counter=0
 

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from model.quantizer import *
+from model_old.quantizer import *
 
 class PReLUQuant(nn.PReLU):     # TODO QUANTIZE
     def __init__(self, num_parameters: int = 1, init: float = 0.25, device=None, dtype=None) -> None:

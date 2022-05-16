@@ -54,8 +54,8 @@ import os
 import sys
 sys.path.append(os.getcwd())
 
-from model.layer import *
-from model.utils import *
+from model_old.layer import *
+from model_old.utils import *
 
 
 class Net2(nn.Module):

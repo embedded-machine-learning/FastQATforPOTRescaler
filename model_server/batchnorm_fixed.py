@@ -3,11 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from model_server.quantizer import *
-from model.utils import*
+from model_old.quantizer import *
+from model_old.utils import*
 
 
-class BatchNorm2dQuantFixed(nn.Module):  # TODO QUANTIZE
+class BatchNorm2dQuantFixed(nn.Module): 
     def __init__(self, num_features, device=None, dtype=None):
         factory_kwargs = {'device': device, 'dtype': dtype}
         super(BatchNorm2dQuantFixed, self).__init__()
@@ -178,7 +178,7 @@ class BatchNorm2dQuantFixed(nn.Module):  # TODO QUANTIZE
                 # self.alpha = torch.where(cond2, self.alpha, self.alpha*2)
                 if torch.any(self.alpha>1):
                     self.alpha = self.alpha/2.0
-                # if torch.any(self.alpha)<0.25:
+                # if torch.all(self.alpha<0.4):
                 #     self.alpha=self.alpha*2
 
                 # self.alpha = self.alpha.clamp(16,1.0/16.0)

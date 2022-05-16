@@ -31,7 +31,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-from model.layer import *
+from model_old.layer import *
 
 class Net(nn.Module):
     def __init__(self):

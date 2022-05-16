@@ -13,7 +13,7 @@ from utils.utils import *
 from utils.parse_config import *
 import torch.nn.functional as F
 
-from model.model import *
+from model_old.model import *
 from model_server.model import *
 
 wdir = 'weights' + os.sep  # weights dir

@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-
 #################################################
 #           FUNCTIONS                           #
 #################################################
@@ -64,76 +63,68 @@ class specialExpQuant(torch.autograd.Function):
 #           MODULES                             #
 #################################################
 class Quant(nn.Module):
-    def __init__(self, size) -> None:
+    def __init__(self) -> None:
         super(Quant, self).__init__()
-        if size==(-1,):
-            self.register_buffer('delta', torch.zeros(1))
-            self.size=(1,)
-        else:
-            self.register_buffer('delta', torch.zeros(size))
-            self.size=size
+        self.register_buffer('delta', torch.zeros(1))
 
     def forward(self, x):
         raise NotImplementedError()
 
 
 class LinQuant(Quant):
-    def __init__(self, bits, size=(-1,)) -> None:
-        super(LinQuant, self).__init__(size)
+    def __init__(self, bits) -> None:
+        super(LinQuant, self).__init__()
         self.bits = bits
-        if size==(-1,):
-            self.register_buffer('abs', torch.zeros(1))
-        else:
-            self.register_buffer('abs', torch.zeros(size))
+        self.register_buffer('abs', torch.zeros(1))
         self.take_new = True
-        self.mom = 0.99
 
-    def forward(self, x, fact = 1):
-        with torch.no_grad():
-            abs = torch.max(torch.abs(x.view(list(self.size)+[-1])),dim=(len(self.size)),keepdim=True).values.view(self.size)           
+    def forward(self, x):
+        abs = torch.max(torch.abs(x.detach().view(-1)))
 
-            if torch.any(abs < 1e-6):
-                print("weights to small to quantize")
+        if abs == 0:
+            self.delta = 2*1/(2.0**self.bits-1.0)
+            return LinQuant_.apply(x, abs+1.0, self.delta)
 
-            abs = abs.masked_fill(abs < 1e-6, 1e-6)
+        if self.take_new:
+            self.abs = abs
+            self.take_new = False
+        elif self.training:
+            self.abs = 0.9*self.abs + 0.1*abs
 
-            if self.take_new:
-                self.abs = abs
-                self.take_new = False
-            elif self.training:
-                self.abs = 0.89*self.abs + 0.01 * (self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0) + 0.1*abs
-
-            self.delta = 2*(self.abs/(2.0**self.bits-1.0))
-        x = x*fact
+        self.delta = 2*self.abs/(2.0**self.bits-1.0)
         return LinQuant_.apply(x, self.abs, self.delta)
 
 
-class LinQuantExpScale(Quant):
-    def __init__(self, bits, size=(-1,)) -> None:
-        super(LinQuantExpScale, self).__init__(size)
+class LinQuantExpScale(nn.Module):
+    def __init__(self, bits) -> None:
+        super(LinQuantExpScale, self).__init__()
         self.bits = bits
-        if size==(-1,):
-            self.register_buffer('abs', torch.zeros(1))
-        else:
-            self.register_buffer('abs', torch.zeros(size))
+        self.register_buffer('abs', torch.zeros(1))
         self.take_new = True
-        self.mom = 0.99
+        self.size = []
 
-    def forward(self, x, fact = 1):
-        with torch.no_grad():
-            abs = torch.max(torch.abs(x.view(list(self.size)+[-1])),dim=(len(self.size)),keepdim=True).values.view(self.size)           
-
-            if torch.any(abs < 1e-6):
-                print("weights to small to quantize")
-
-            abs = abs.masked_fill(abs < 1e-6, 1e-6)
-
-            if self.take_new:
-                self.abs = abs
-                self.take_new = False
-            elif self.training:
-                self.abs = 0.89*self.abs + 0.01 * expQuant.apply(self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0) + 0.1*abs
-
-            self.delta = 2*expQuant.apply(self.abs/(2.0**self.bits-1.0))
+    def forward(self, x, fact=1):
         x = x*fact
+        if len(self.size) == 0:
+            self.size = list(x.shape)
+            self.size[1] = -1
+            for i in range(2, len(self.size)):
+                self.size[i] = 1
+        abs = torch.max(torch.abs(x.detach().view(self.size)),
+                        dim=(1), keepdim=True).values
+
+        if torch.any(abs < 1e-6):
+            print("weights to small to quantize")
+
+        abs = abs.masked_fill(abs < 1e-6, 1e-6)
+
+        if self.take_new:
+            self.abs = abs
+            self.take_new = False
+        elif self.training:
+            self.abs = 0.89*self.abs + 0.01 * \
+                expQuant.apply(self.abs/(2.0**self.bits-1.0)) * \
+                (2.0**self.bits-1.0) + 0.1*abs
+
+        self.delta = 2*expQuant.apply(self.abs/(2.0**self.bits-1.0))
         return LinQuant_.apply(x, expQuant.apply(self.abs), self.delta)
