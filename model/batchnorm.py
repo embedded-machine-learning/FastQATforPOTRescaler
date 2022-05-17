@@ -55,6 +55,8 @@ class BatchNorm2dQuantFixed(nn.Module):
             self.alpha = mom*self.alpha + (1-mom)*alpha*self.alpha
             if torch.any(self.alpha>1):
                 self.alpha = self.alpha/2.0
+            if torch.all(self.alpha<0.4):
+                self.alpha = self.alpha*2.0
             self.sig = self.sig*torch.square(self.alpha/old_alpha)
             self.mu = self.mu*self.alpha/old_alpha
 

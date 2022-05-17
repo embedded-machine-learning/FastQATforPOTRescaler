@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Tuple
+from typing import Optional, Tuple
+from torch.nn.common_types import _size_any_t
 from model.batchnorm import *
 
 import numpy as np
@@ -115,3 +116,11 @@ class BlockQuant4(nn.Module):
         else:
             x = Round.apply(x)
         return x,rexp
+
+class MaxPool(nn.MaxPool2d):
+    def __init__(self, kernel_size: _size_any_t, stride: Optional[ _size_any_t] = None, padding:  _size_any_t = 0, dilation:  _size_any_t = 1, return_indices: bool = False, ceil_mode: bool = False) -> None:
+        super(MaxPool,self).__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)
+    
+    def forward(self, input: Tuple[torch.Tensor,torch.Tensor]):
+        val,rexp = input
+        return super().forward(val),rexp
