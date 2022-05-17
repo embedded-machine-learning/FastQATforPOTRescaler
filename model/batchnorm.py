@@ -39,6 +39,7 @@ class BatchNorm2dQuantFixed(nn.Module):
         n = delta_in.view(-1)/delta_out.view(-1)*gamma.view(-1)/torch.sqrt(sig.view(-1)+1e-5)
         nr = torch.median(torch.round(torch.log2(n)))*torch.ones_like(torch.round(torch.log2(n)))
         return nr,nr+rexp.view(-1)
+        
     def calculate_t(self,sig,mu,gamma,beta,delta_out) -> torch.Tensor:
         t =  -mu.view(-1)*(gamma.view(-1))/(torch.sqrt(sig.view(-1)+1e-5) * delta_out.view(-1)) + beta.view(-1)/delta_out.view(-1)
         t = torch.round(t).clamp(-128, 127)

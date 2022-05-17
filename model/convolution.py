@@ -31,7 +31,6 @@ class Conv2dLayerLinQuant(nn.Conv2d):
         if torch.any(torch.isnan(tmp)):
             print(torch.max(torch.abs(self.weight.data.view(-1))))
             print(factor)
-        # tmp=checkNan.apply(tmp)
         return self._conv_forward(input, tmp, None),rexp
 
 class Conv2dLinChannelQuant(Conv2dLayerLinQuant):
