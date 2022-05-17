@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from model.utils import *
 
 
 #################################################
@@ -11,10 +12,15 @@ import torch.nn.functional as F
 class expQuant(torch.autograd.Function):
     @staticmethod
     def forward(self, x):
-        return torch.exp2(torch.round(torch.log2(x)))
+        tmp = torch.exp2(torch.round(torch.log2(x)))
+        if torch.any(torch.isnan(tmp)):
+            print("nan in exp scale")
+        return tmp
 
     @staticmethod
     def backward(self, grad_output):
+        if torch.any(torch.isnan(grad_output)):
+            print("nan in exp scale")
         return grad_output.detach()
 
 
@@ -24,7 +30,8 @@ class LinQuant_(torch.autograd.Function):
         self.save_for_backward(x, abs)
         x = torch.clamp(x, -abs, abs)
         x = torch.round((x)/delta)*delta
-
+        if torch.any(torch.isnan(x)):     
+            print("nan in Linquant forward")
         return x
 
     @staticmethod
@@ -34,6 +41,8 @@ class LinQuant_(torch.autograd.Function):
             torch.gt(x, 2*abs), torch.gt(grad_output, 0)), 0)
         grad_output = grad_output.masked_fill(torch.logical_and(
             torch.le(x, -2*abs), torch.le(grad_output, 0)), 0)
+        if torch.any(torch.isnan(grad_output)):
+            print("nan in Linquant back")
         return grad_output.detach(), None, None
 
 
@@ -45,6 +54,8 @@ class specialExpQuant(torch.autograd.Function):
         n = torch.where(cond, torch.log2(
             expQuant.apply(x)), torch.zeros_like(x))
         x = torch.where(cond, expQuant.apply(x), torch.zeros_like(x))
+        if torch.any(torch.isnan(x)):     
+            print("nan in specialExpQuant forward")
         return x.detach(), n.detach(), cond.detach()
 
     def backward(self, grad_output: torch.Tensor, n_output: torch.Tensor, cond_output: torch.Tensor):
@@ -56,6 +67,8 @@ class specialExpQuant(torch.autograd.Function):
         # only allow negative graients when smaller 2**-6 so that it can still get bigger
         grad_output = grad_output.masked_fill(torch.logical_and(
             torch.le(x, (2**-7)*1.0), torch.le(grad_output, 0)), 0)
+        if torch.any(torch.isnan(grad_output)):     
+            print("nan in specialExpQuant backward")
         return grad_output.detach(), None, None
 
 

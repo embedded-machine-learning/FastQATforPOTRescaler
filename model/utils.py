@@ -21,3 +21,23 @@ class switch(torch.autograd.Function):
     @staticmethod
     def backward(self, out1: torch.Tensor, out2: torch.Tensor):
         return out1.detach(), out2.detach()
+
+
+import numpy as np
+
+class checkNan(torch.autograd.Function):
+    @staticmethod
+    def forward(self, in1):
+        if torch.any(torch.isnan(in1)):
+            print("check nan forward nan")
+        return in1
+
+    @staticmethod
+    def backward(self, out: torch.Tensor):
+        if torch.any(torch.isnan(out)):
+            print("check nan backward nan")
+            # print(out)
+            # npdata = out.view(-1).cpu().detach().numpy()
+            # np.savetxt("checkNanvalue.txt",npdata)
+        out = out.masked_fill(torch.isnan(out),0)
+        return out.detach()
