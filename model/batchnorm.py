@@ -29,7 +29,7 @@ class BatchNorm2dQuantFixed(nn.Module):
         self.first = True
 
         # from quant
-        self.quant = LinQuant(8,(1,num_features,1,1))
+        self.quant = LinQuant(8,(-1,),0.1,0)
         self.register_buffer('inference_n', torch.ones(num_features))
 
         # for weights
