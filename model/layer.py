@@ -28,8 +28,10 @@ class Stop(nn.Module):
     def __init__(self) -> None:
         super(Stop, self).__init__()
         self.size = []
+        self.register_buffer('exp',None)
     def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
         x , rexp = invals
+        self.exp = rexp
         if not self.training:
             x = x/(2**-rexp[None,:,None,None])
         return x
