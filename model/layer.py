@@ -193,10 +193,52 @@ class BlockQuant4(nn.Module):
             x = Floor.apply(x)
         return x,rexp
 
+
+class BlockQuantDyn4(nn.Module):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:
+        super(BlockQuantDyn4, self).__init__()
+
+        self.conv = Conv2dLinChannelQuant(layers_in, layers_out, kernel_size, stride, padding=int(
+            np.floor(kernel_size/2)), groups=groups)
+        self.bn = BatchNorm2dQuant(layers_out)
+        self.prelu = nn.LeakyReLU()
+
+        self.first_old_exp = True
+        self.old_exp = 0
+
+    def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
+        
+        fact = self.bn.get_weight_factor()
+
+        # set sigma and old exp
+        # if self.training:
+        #    if self.first_old_exp:
+        #        self.old_exp=get_rexp()
+        #        self.first_old_exp=False
+        #    self.bn.sig = self.bn.sig*(2**(2*(get_rexp()-self.old_exp)))
+        #    self.old_exp=get_rexp()
+
+        x = self.conv(invals, fact)
+        x = self.bn(x, self.conv.quantw.delta)
+       
+        x , rexp = x
+        x = self.prelu(x)
+
+        if self.training:
+            x = x*(2**(-rexp[None,:,None,None]))
+            x = Floor.apply(x)
+            x = x/(2**(-rexp[None,:,None,None]))
+        else:
+            x = Floor.apply(x)
+        return x,rexp
+
 class MaxPool(nn.MaxPool2d):
     def __init__(self, kernel_size: _size_any_t, stride: Optional[ _size_any_t] = None, padding:  _size_any_t = 0, dilation:  _size_any_t = 1, return_indices: bool = False, ceil_mode: bool = False) -> None:
         super(MaxPool,self).__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)
     
     def forward(self, input: Tuple[torch.Tensor,torch.Tensor]):
         val,rexp = input
-        return super().forward(val),rexp
+        return  (F.max_pool2d(val, self.kernel_size, self.stride,
+                            self.padding, self.dilation, self.ceil_mode,
+                            self.return_indices), 
+                rexp)

@@ -362,6 +362,63 @@ class CamtadNetFixedPool3(nn.Module):
             return torch.cat(io, 1), p
         return x
 
+
+class CamtadNetPool3(nn.Module):
+    def __init__(self):
+        super(CamtadNetPool3, self).__init__()
+
+        self.layers = nn.Sequential(
+            Start(-8),
+            BlockQuantDyn4(3, 16, 3, 1),
+            MaxPool(2,2),
+            BlockQuantDyn4(16, 32, 3, 1),
+            MaxPool(2,2),
+            BlockQuantDyn4(32, 64, 3, 1),
+            MaxPool(2,2),
+            BlockQuantDyn4(64, 64, 3, 1),
+            MaxPool(2,2),
+            BlockQuantDyn4(64, 64, 3, 1),
+            BlockQuantDyn4(64, 64, 3, 1),
+            BlockQuantDyn4(64, 64, 3, 1),
+            BlockQuantDyn4(64, 64, 3, 1),
+            Conv2dExpLayerQuantNormWeightsAdaptExp(64, 36, 1, 1),
+            Stop()
+        )
+
+        self.yololayer = YOLOLayer(
+            [[20, 20], [20, 20], [20, 20], [20, 20], [20, 20], [20, 20]])
+        self.yolo_layers = [self.yololayer]
+
+
+    def set(self, val):
+        # just here for compatability
+        pass
+
+    def set_Quant_IG_train_FLAG(self, val):
+        # just here for compatability
+        pass
+
+    def setquant(self, val):
+        # just here for compatability
+        pass
+
+    def forward(self, x):
+        img_size = x.shape[-2:]
+        # print(x.shape)
+        yolo_out, out = [], []
+
+        x = self.layers(x)
+        x = self.yololayer(x, img_size)
+
+        yolo_out.append(x)
+
+        if self.training:  # train
+            return yolo_out
+        else:  # test
+            io, p = zip(*yolo_out)  # inference output, training output
+            return torch.cat(io, 1), p
+        return x
+
 class CamtadNetFixed2(nn.Module):
     def __init__(self):
         super(CamtadNetFixed2, self).__init__()

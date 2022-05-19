@@ -304,6 +304,7 @@ class BatchNorm2dQuantFixedDynOut(BatchNorm2dQuantFixed):
             return x, rexp
 
 
+
 class BatchNorm2dQuant(BatchNorm2dQuantFixed):
     def __init__(self, num_features, device=None, dtype=None):
         super(BatchNorm2dQuant,self).__init__(num_features, device, dtype)
@@ -313,4 +314,23 @@ class BatchNorm2dQuant(BatchNorm2dQuantFixed):
         n = delta_in.view(-1)/delta_out.view(-1)*gamma.view(-1)/torch.sqrt(sig.view(-1)+1e-5)
         nr = torch.round(torch.log2(n))
         return nr,nr+rexp.view(-1)
+
+    def calculate_alpha(self,delta_in)-> None:
+         with torch.no_grad():
+            mom = 0.99
+            sig = (self.weight.view(-1)*delta_in.view(-1)/self.quant.delta.view(-1)).square() * torch.exp2(-2*self.n.view(-1))-1e-5
+            alpha = torch.sqrt(sig.view(-1)/self.sig.view(-1))
+            alpha = alpha.masked_fill(torch.isnan(alpha), 1)
+            old_alpha = self.alpha
+            self.alpha = mom*self.alpha + (1-mom)*alpha*self.alpha
+            cond1 = self.alpha < 1.0
+            cond2 = self.alpha > 0.3
+            # cond = torch.logical_or(cond1,cond2)
+            # self.alpha = torch.where(cond,self.alpha,ones)
+            self.alpha = self.alpha.clamp(0.2, 1.0)
+            self.alpha = torch.where(cond1, self.alpha, self.alpha/2)
+            self.alpha = torch.where(cond2, self.alpha, self.alpha*2)
+
+            self.sig = self.sig*torch.square(self.alpha/old_alpha)
+            self.mu = self.mu*self.alpha/old_alpha
 
