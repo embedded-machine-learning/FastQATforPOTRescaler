@@ -38,6 +38,82 @@ class Stop(nn.Module):
         x = checkNan.apply(x)       # removes nan from backprop
         return x
 
+class BlockQuant(nn.Module):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:
+        super(BlockQuant, self).__init__()
+
+        self.conv = Conv2dLinChannelQuant(layers_in, layers_out, kernel_size, stride, padding=int(
+            np.floor(kernel_size/2)), groups=groups)
+        self.bn = BatchNorm2dQuant(layers_out)
+        self.prelu = nn.LeakyReLU()
+
+        self.first_old_exp = True
+        self.old_exp = 0
+
+    def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
+        
+        fact = self.bn.get_weight_factor()
+
+        # set sigma and old exp
+        # if self.training:
+        #    if self.first_old_exp:
+        #        self.old_exp=get_rexp()
+        #        self.first_old_exp=False
+        #    self.bn.sig = self.bn.sig*(2**(2*(get_rexp()-self.old_exp)))
+        #    self.old_exp=get_rexp()
+
+        x = self.conv(invals, fact)
+        x = self.bn(x, self.conv.quantw.delta)
+       
+        x , rexp = x
+        x = self.prelu(x)
+
+        if self.training:
+            x = x*(2**(-rexp[None,:,None,None]))
+            x = Round.apply(x)
+            x = x/(2**(-rexp[None,:,None,None]))
+        else:
+            x = Round.apply(x)
+        return x,rexp
+
+class BlockQuantBiasChange(nn.Module):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:
+        super(BlockQuantBiasChange, self).__init__()
+
+        self.conv = Conv2dLinChannelQuant(layers_in, layers_out, kernel_size, stride, padding=int(
+            np.floor(kernel_size/2)), groups=groups)
+        self.bn = BatchNorm2dQuantFixedBiasChange(layers_out)
+        self.prelu = nn.LeakyReLU()
+
+        self.first_old_exp = True
+        self.old_exp = 0
+
+    def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
+        
+        fact = self.bn.get_weight_factor()
+
+        # set sigma and old exp
+        # if self.training:
+        #    if self.first_old_exp:
+        #        self.old_exp=get_rexp()
+        #        self.first_old_exp=False
+        #    self.bn.sig = self.bn.sig*(2**(2*(get_rexp()-self.old_exp)))
+        #    self.old_exp=get_rexp()
+
+        x = self.conv(invals, fact)
+        x = self.bn(x, self.conv.quantw.delta)
+       
+        x , rexp = x
+        x = self.prelu(x)
+
+        if self.training:
+            x = x*(2**(-rexp[None,:,None,None]))
+            x = Round.apply(x)
+            x = x/(2**(-rexp[None,:,None,None]))
+        else:
+            x = Round.apply(x)
+        return x,rexp
+
 
 
 class BlockQuant3(nn.Module):
