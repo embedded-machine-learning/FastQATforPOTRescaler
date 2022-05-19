@@ -201,7 +201,7 @@ class BlockQuantDyn4(nn.Module):
         self.conv = Conv2dLinChannelQuant(layers_in, layers_out, kernel_size, stride, padding=int(
             np.floor(kernel_size/2)), groups=groups)
         self.bn = BatchNorm2dQuant(layers_out)
-        self.prelu = nn.LeakyReLU()
+        self.prelu = nn.LeakyReLU(0.125)
 
         self.first_old_exp = True
         self.old_exp = 0
