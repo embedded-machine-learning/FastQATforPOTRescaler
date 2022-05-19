@@ -45,7 +45,7 @@ class BlockQuant(nn.Module):
         self.conv = Conv2dLinChannelQuant(layers_in, layers_out, kernel_size, stride, padding=int(
             np.floor(kernel_size/2)), groups=groups)
         self.bn = BatchNorm2dQuant(layers_out)
-        self.prelu = nn.LeakyReLU()
+        self.prelu = nn.LeakyReLU(0.25)
 
         self.first_old_exp = True
         self.old_exp = 0
@@ -83,7 +83,7 @@ class BlockQuantBiasChange(nn.Module):
         self.conv = Conv2dLinChannelQuant(layers_in, layers_out, kernel_size, stride, padding=int(
             np.floor(kernel_size/2)), groups=groups)
         self.bn = BatchNorm2dQuantFixedBiasChange(layers_out)
-        self.prelu = nn.LeakyReLU()
+        self.prelu = nn.LeakyReLU(0.25)
 
         self.first_old_exp = True
         self.old_exp = 0
@@ -123,7 +123,7 @@ class BlockQuant3(nn.Module):
         self.conv = Conv2dLinChannelQuant(layers_in, layers_out, kernel_size, stride, padding=int(
             np.floor(kernel_size/2)), groups=groups)
         self.bn = BatchNorm2dQuantFixed(layers_out)
-        self.prelu = nn.LeakyReLU()
+        self.prelu = nn.LeakyReLU(0.25)
 
         self.first_old_exp = True
         self.old_exp = 0
@@ -162,7 +162,7 @@ class BlockQuant4(nn.Module):
         self.conv = Conv2dLinChannelQuant(layers_in, layers_out, kernel_size, stride, padding=int(
             np.floor(kernel_size/2)), groups=groups)
         self.bn = BatchNorm2dQuantFixedDynOut(layers_out)
-        self.prelu = nn.LeakyReLU()
+        self.prelu = nn.LeakyReLU(0.25)
 
         self.first_old_exp = True
         self.old_exp = 0
