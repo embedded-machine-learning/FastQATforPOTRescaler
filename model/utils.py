@@ -13,6 +13,17 @@ class Round(torch.autograd.Function):
         grad_input = grad_output.clone()
         return grad_input
 
+class Floor(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        ctx.input = input
+        return torch.round(input)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        grad_input = grad_output.clone()
+        return grad_input
+
 class switch(torch.autograd.Function):
     @staticmethod
     def forward(self, in1, in2):

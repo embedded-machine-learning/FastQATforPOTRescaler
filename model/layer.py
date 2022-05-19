@@ -70,10 +70,10 @@ class BlockQuant(nn.Module):
 
         if self.training:
             x = x*(2**(-rexp[None,:,None,None]))
-            x = Round.apply(x)
+            x = Floor.apply(x)
             x = x/(2**(-rexp[None,:,None,None]))
         else:
-            x = Round.apply(x)
+            x = Floor.apply(x)
         return x,rexp
 
 class BlockQuantBiasChange(nn.Module):
@@ -108,10 +108,10 @@ class BlockQuantBiasChange(nn.Module):
 
         if self.training:
             x = x*(2**(-rexp[None,:,None,None]))
-            x = Round.apply(x)
+            x = Floor.apply(x)
             x = x/(2**(-rexp[None,:,None,None]))
         else:
-            x = Round.apply(x)
+            x = Floor.apply(x)
         return x,rexp
 
 
@@ -148,10 +148,10 @@ class BlockQuant3(nn.Module):
 
         if self.training:
             x = x*(2**(-rexp[None,:,None,None]))
-            x = Round.apply(x)
+            x = Floor.apply(x)
             x = x/(2**(-rexp[None,:,None,None]))
         else:
-            x = Round.apply(x)
+            x = Floor.apply(x)
         return x,rexp
 
 
@@ -187,10 +187,10 @@ class BlockQuant4(nn.Module):
 
         if self.training:
             x = x*(2**(-rexp[None,:,None,None]))
-            x = Round.apply(x)
+            x = Floor.apply(x)
             x = x/(2**(-rexp[None,:,None,None]))
         else:
-            x = Round.apply(x)
+            x = Floor.apply(x)
         return x,rexp
 
 class MaxPool(nn.MaxPool2d):
