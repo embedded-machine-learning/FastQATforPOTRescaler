@@ -42,7 +42,7 @@ class Stop(nn.Module):
         x = checkNan.apply(x)       # removes nan from backprop
         return x
 
-class Bias(nn.Model):
+class Bias(nn.Module):
     def __init__(self, num_features, device=None, dtype=None):
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()       
