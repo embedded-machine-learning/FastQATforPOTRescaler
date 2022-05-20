@@ -9,7 +9,11 @@ import numpy as np
 
 from model.utils import *
 from model.convolution import *
+from model.activations import *
 
+#########################################################################################
+#                                   CLASSES                                             #
+#########################################################################################
 
 class Start(nn.Module):
     def __init__(self, running_exp_init) -> None:
@@ -37,6 +41,34 @@ class Stop(nn.Module):
             x = x/(2**-rexp[None,:,None,None])
         x = checkNan.apply(x)       # removes nan from backprop
         return x
+
+class BlockQuantN(nn.Module):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:
+        super(BlockQuantN, self).__init__()
+
+        self.conv = Conv2dLinChannelQuant(layers_in, layers_out, kernel_size, stride, padding=int(
+            np.floor(kernel_size/2)), groups=groups)
+        self.bn = BatchNorm2dBase(layers_out)
+        self.activation = LeakReLU(0.125)
+
+        self.first_old_exp = True
+        self.old_exp = 0
+
+    def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
+        
+        fact = self.bn.get_weight_factor()
+
+        x = self.conv(invals, fact)
+        x = self.bn(x, self.conv.quantw.delta)
+        x = self.activation(x)
+
+        return x
+
+
+
+#########################################################################################
+#                                   OLD                                                 #
+#########################################################################################
 
 class BlockQuant(nn.Module):
     def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:
