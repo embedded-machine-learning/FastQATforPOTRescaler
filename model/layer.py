@@ -42,6 +42,30 @@ class Stop(nn.Module):
         x = checkNan.apply(x)       # removes nan from backprop
         return x
 
+class Bias(nn.Model):
+    def __init__(self, num_features, device=None, dtype=None):
+        factory_kwargs = {'device': device, 'dtype': dtype}
+        super().__init__()       
+        self.bias = torch.nn.Parameter(
+            torch.empty(num_features, **factory_kwargs))
+        torch.nn.init.ones_(self.bias) 
+        self.register_buffer('t',torch.zeros(num_features))
+    
+    def forward(self,inputs):
+        x,rexp=inputs
+        self.t = Round.apply(self.bias*(2**(-rexp)))
+        self.t = self.t.clamp(-128,127)
+        if self.training:
+            x = x*(2**(-rexp[None,:,None,None]))
+            x = x + self.t[None,:,None,None]
+            x = x.clamp(-128,127)
+            x = x/(2**(-rexp[None,:,None,None]))
+        else:
+            x = x + self.t[None,:,None,None]
+            x = x.clamp(-128,127)
+
+        return x,rexp
+
 class BlockQuantN(nn.Module):
     def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:
         super(BlockQuantN, self).__init__()

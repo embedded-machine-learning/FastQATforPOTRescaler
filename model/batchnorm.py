@@ -82,6 +82,7 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
         self.out_quant = LinQuantExpScale(8, (-1,), 0.1, 0)
         self.register_buffer('in_quant',    torch.ones(num_features))
         self.register_buffer('rexp',        torch.zeros(num_features))
+        self.register_buffer('weights_sign', torch.ones(num_features))
 
     def get_weight_factor(self):
         if self.training:
@@ -102,12 +103,13 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
             self.in_quant = in_quant
         self.rexp=rexp
         x = super().forward(xorig)
+        self.weight_sign=torch.sign(self.weight)
         if self.training:
             x = self.out_quant(x)
             with torch.no_grad():
                 mean = xorig.mean([0, 2, 3])
                 var = xorig.var([0, 2, 3], unbiased=False)
-                self.n = self.func_n(weight=self.weight.view(-1),
+                self.n = self.func_n(weight=torch.abs(self.weight.view(-1)),
                                      bias=self.bias.view(-1),
                                      mean=mean.view(-1),
                                      var=var.view(-1),
@@ -121,18 +123,19 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
                                      in_quant=self.in_quant.view(-1),
                                      out_quant=self.out_quant.delta.view(-1),
                                      rexp=rexp.view(-1))
-                xorig = (xorig/self.in_quant.view(-1)[None, :, None, None]) * torch.exp2(
+                xorig = self.weight_sign[None,:,None,None]*(xorig/self.in_quant.view(-1)[None, :, None, None]) * torch.exp2(
                     self.n-rexp.view(-1))[None, :, None, None] + self.t[None, :, None, None]
                 xorig = torch.floor(xorig)
                 xorig = torch.clamp(xorig, -128, 127)
                 xorig = xorig*self.out_quant.delta[None, :, None, None]
                 rexp = torch.log2(self.out_quant.delta)
-
+            if torch.any(torch.isnan(x)) or torch.any(torch.isnan(xorig)):
+                print("batchnorm out is nan") 
             x, xorig = switch.apply(x, xorig)
             return x, rexp
         else:
             with torch.no_grad():
-                self.n = self.func_n(weight=self.weight.view(-1),
+                self.n = self.func_n(weight=torch.abs(self.weight.view(-1)),
                                      bias=self.bias.view(-1),
                                      mean=self.running_mean.view(-1),
                                      var=self.running_var.view(-1),
@@ -146,7 +149,7 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
                                      in_quant=self.in_quant.view(-1),
                                      out_quant=self.out_quant.delta.view(-1),
                                      rexp=rexp.view(-1))
-                xorig = xorig * torch.exp2(
+                xorig = self.weight_sign[None,:,None,None]*xorig * torch.exp2(
                     self.n)[None, :, None, None] + self.t[None, :, None, None]
                 xorig = torch.floor(xorig)
                 xorig = torch.clamp(xorig, -128, 127)
