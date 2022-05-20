@@ -84,7 +84,8 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
         self.register_buffer('rexp',        torch.zeros(num_features))
 
     def get_weight_factor(self):
-        self.alpha, self.running_var, self.running_mean = self.func_a(weight=self.weight.view(-1),
+        if self.training:
+            self.alpha, self.running_var, self.running_mean = self.func_a(weight=self.weight.view(-1),
                                                                       bias=self.bias.view(-1),
                                                                       mean=self.running_mean.view(-1),
                                                                       var=self.running_var.view(-1),
@@ -145,8 +146,8 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
                                      in_quant=self.in_quant.view(-1),
                                      out_quant=self.out_quant.delta.view(-1),
                                      rexp=rexp.view(-1))
-                xorig = (xorig/self.in_quant.view(-1)[None, :, None, None]) * torch.exp2(
-                    self.n-rexp.view(-1))[None, :, None, None] + self.t[None, :, None, None]
+                xorig = xorig * torch.exp2(
+                    self.n)[None, :, None, None] + self.t[None, :, None, None]
                 xorig = torch.floor(xorig)
                 xorig = torch.clamp(xorig, -128, 127)
                 rexp = torch.log2(self.out_quant.delta)
