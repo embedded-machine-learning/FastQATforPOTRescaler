@@ -101,8 +101,8 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
         if in_quant is not None:
             self.in_quant = in_quant
         self.rexp=rexp
+        x = super().forward(xorig)
         if self.training:
-            x = super().forward(xorig)
             x = self.out_quant(x)
             with torch.no_grad():
                 mean = xorig.mean([0, 2, 3])
