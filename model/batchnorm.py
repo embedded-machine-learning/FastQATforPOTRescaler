@@ -52,11 +52,11 @@ def calculate_alpha(weight: torch.Tensor,
         alpha = torch.sqrt(var_new/var)
         alpha = alpha.masked_fill(torch.isnan(alpha), 1)
         alpha = mom*alpha_old + (1-mom)*alpha*alpha_old
-        cond1 = alpha < 1.1
+        cond1 = alpha < 1.05
         cond2 = alpha > 0.3
         alpha = torch.where(cond1, alpha, alpha/2)
         alpha = torch.where(cond2, alpha, alpha*2)
-        alpha = alpha.clamp(0.2, 1.0)
+        alpha = alpha.clamp(0.2, 1.06)
         var = var*torch.square(alpha/alpha_old)
         mean = mean*alpha/alpha_old
     return alpha, var, mean
@@ -79,7 +79,7 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
         self.func_t = calculate_t
         self.func_a = calculate_alpha
 
-        self.out_quant = LinQuant(8, (-1,), 0.1, 0)
+        self.out_quant = LinQuantExpScale(8, (-1,), 0.1, 0)
         self.register_buffer('in_quant',    torch.ones(num_features))
         self.register_buffer('rexp',        torch.zeros(num_features))
 
