@@ -31,29 +31,31 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-from model_old.layer import *
+from model.layer import *
 
 class Net(nn.Module):
     def __init__(self):
         super().__init__()
-        self.start = Start(-8)
+        self.start = Start(8)
         self.stop = Stop()
-        self.conv1 = BlockQuant(3, 6, 5,2)
+        self.conv1 = BlockQuantN(3, 6, 5,2)
         #self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = BlockQuant(6, 16, 5,2)
-        self.conv3 = BlockQuant(16, 32, 5,2)
-        self.fc1 = LinearBN(512, 120)
-        self.fc3 = LinQuant(120, 10)
+        self.conv2 = BlockQuantN(6, 16, 5,2)
+        self.conv3 = BlockQuantN(16, 32, 5,2)
+        self.bias = Bias(32)
+        self.fc1 = nn.Linear(512, 120)
+        self.fc3 = nn.Linear(120, 10)
 
     def forward(self, x):
         x = self.start(x)
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
+        x = self.bias(x)
+        x = self.stop(x)
         x = torch.flatten(x, 1) # flatten all dimensions except batch
         x = F.relu(self.fc1(x))
         x = self.fc3(x)
-        x = self.stop(x)
         return x
 
 
@@ -69,7 +71,7 @@ optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
 
 
-for epoch in range(10):  # loop over the dataset multiple times
+for epoch in range(1):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
@@ -110,3 +112,9 @@ with torch.no_grad():
         correct += (predicted == labels).sum().item()
 
 print(f'Accuracy of the network on the 10000 test images: {100 * correct // total} %')
+
+import os
+if not os.path.exists("./demo/cifa10/"):
+    os.mkdir("./demo/cifa10/")
+
+torch.save(net.state_dict(),"./demo/cifa10/ckp.pt")
