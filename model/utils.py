@@ -17,7 +17,7 @@ class Floor(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input):
         ctx.input = input
-        return torch.round(input)
+        return torch.floor(input)
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -46,7 +46,7 @@ class checkNan(torch.autograd.Function):
     @staticmethod
     def backward(self, out: torch.Tensor):
         if torch.any(torch.isnan(out)):
-            print("check nan backward nan")
+            print("check nan backward nan:",torch.sum(torch.isnan(out)))
             # print(out)
             # npdata = out.view(-1).cpu().detach().numpy()
             # np.savetxt("checkNanvalue.txt",npdata)

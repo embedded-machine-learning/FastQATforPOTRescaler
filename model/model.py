@@ -94,7 +94,7 @@ class CamtadNetFixedPoolN(nn.Module):
         super(CamtadNetFixedPoolN, self).__init__()
 
         self.layers = nn.Sequential(
-            Start(-8),
+            Start(8),
             BlockQuantN(3, 16, 3, 1),
             MaxPool(2,2),
             BlockQuantN(16, 32, 3, 1),
@@ -131,6 +131,9 @@ class CamtadNetFixedPoolN(nn.Module):
         img_size = x.shape[-2:]
         # print(x.shape)
         yolo_out, out = [], []
+        
+        x = x-0.5
+        x = x.clamp(-0.5,0.5)
 
         x = self.layers(x)
         x = self.yololayer(x, img_size)
@@ -149,7 +152,7 @@ class CamtadNetFixedPoolN2(CamtadNetFixedPoolN):
         super(CamtadNetFixedPoolN2, self).__init__()
 
         self.layers = nn.Sequential(
-            Start(-8),
+            Start(8),
             BlockQuantN(3, 16, 3, 1),
             MaxPool(2,2),
             BlockQuantN(16, 32, 3, 1),
@@ -161,8 +164,9 @@ class CamtadNetFixedPoolN2(CamtadNetFixedPoolN):
             BlockQuantN(64, 64, 3, 1),
             BlockQuantN(64, 64, 3, 1),
             BlockQuantN(64, 64, 3, 1),
-            Conv2dExpLayerQuantAdaptExp(64, 36, 1, 1),
-            Bias(36),
+            # Conv2dExpLayerQuantAdaptExp(64, 36, 1, 1),
+            BlockQuantNwoA(64,36,1,1),
+            # Bias(36),
             Stop()
         )
 
@@ -205,6 +209,8 @@ class CamtadNetFixed(nn.Module):
         img_size = x.shape[-2:]
         # print(x.shape)
         yolo_out, out = [], []
+        x = x-0.5
+        x = x.clamp(-0.5,0.5)
 
         x = self.layers(x)
         x = self.yololayer(x, img_size)

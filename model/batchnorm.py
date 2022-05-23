@@ -33,7 +33,6 @@ def calculate_t(weight: torch.Tensor,
                 rexp: torch.Tensor) -> torch.Tensor:
     with torch.no_grad():
         t = -mean*(weight)/(torch.sqrt(var+1e-5) * out_quant) + bias/out_quant
-        t = torch.round(t).clamp(-128, 127)
         return t
 
 
@@ -67,7 +66,7 @@ def calculate_alpha(weight: torch.Tensor,
 #########################################################################################
 
 class BatchNorm2dBase(torch.nn.BatchNorm2d):
-    def __init__(self, num_features, eps=0.00001, momentum=0.1, affine=True, track_running_stats=True, device=None, dtype=None):
+    def __init__(self, num_features, eps=0.00001, momentum=0.1, affine=True, track_running_stats=True, device=None, dtype=None, outQuantBits=8):
         super(BatchNorm2dBase, self).__init__(num_features, eps, momentum,
                                               affine, track_running_stats, device, dtype)
 
@@ -79,10 +78,11 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
         self.func_t = calculate_t
         self.func_a = calculate_alpha
 
-        self.out_quant = LinQuantExpScale(8, (-1,), 0.1, 0)
+        self.out_quant = LinQuantExpScale(outQuantBits, (-1,), 0.1, 0)
         self.register_buffer('in_quant',    torch.ones(num_features))
         self.register_buffer('rexp',        torch.zeros(num_features))
         self.register_buffer('weights_sign', torch.ones(num_features))
+        self.outQuantBits=outQuantBits
 
     def get_weight_factor(self):
         if self.training:
@@ -123,10 +123,12 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
                                      in_quant=self.in_quant.view(-1),
                                      out_quant=self.out_quant.delta.view(-1),
                                      rexp=rexp.view(-1))
+                self.t = self.t.clamp(-(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1)
+
                 xorig = self.weight_sign[None,:,None,None]*(xorig/self.in_quant.view(-1)[None, :, None, None]) * torch.exp2(
                     self.n-rexp.view(-1))[None, :, None, None] + self.t[None, :, None, None]
                 xorig = torch.floor(xorig)
-                xorig = torch.clamp(xorig, -128, 127)
+                xorig = torch.clamp(xorig, -(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1)
                 xorig = xorig*self.out_quant.delta[None, :, None, None]
                 rexp = torch.log2(self.out_quant.delta)
             if torch.any(torch.isnan(x)) or torch.any(torch.isnan(xorig)):
@@ -149,10 +151,12 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
                                      in_quant=self.in_quant.view(-1),
                                      out_quant=self.out_quant.delta.view(-1),
                                      rexp=rexp.view(-1))
+                self.t = self.t.clamp(-(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1)      
+                           
                 xorig = self.weight_sign[None,:,None,None]*xorig * torch.exp2(
                     self.n)[None, :, None, None] + self.t[None, :, None, None]
                 xorig = torch.floor(xorig)
-                xorig = torch.clamp(xorig, -128, 127)
+                xorig = torch.clamp(xorig, -(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1)
                 rexp = torch.log2(self.out_quant.delta)
             return xorig, rexp
 

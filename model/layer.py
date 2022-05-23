@@ -18,14 +18,19 @@ from model.activations import *
 class Start(nn.Module):
     def __init__(self, running_exp_init) -> None:
         super(Start, self).__init__()
-        self.register_buffer('run',torch.tensor([running_exp_init]))
-
+        self.register_buffer('run',torch.tensor([-running_exp_init]))
+        self.delta = 1.0/(2.0**(running_exp_init)-1)
     def forward(self, x):
         rexp=self.run
-        x = x*(2**(-rexp[None,:,None,None]))
-        x = Round.apply(x)
+        # x = x*(2**(-rexp[None,:,None,None]))
+        x = x/self.delta
+        # print("delta: ", self.delta)
+        # print("min,med,max:" , torch.min(x),torch.mean(x),torch.max(x))
+        x = Floor.apply(x)
+        # print("min,med,max(pf):" , torch.min(x),torch.mean(x),torch.max(x))
         if self.training:
             x = x/(2**(-rexp[None,:,None,None]))
+            # print("min,med,max(t):" , torch.min(x),torch.mean(x),torch.max(x))
         return (x, rexp)
 
 
@@ -48,21 +53,21 @@ class Bias(nn.Module):
         super().__init__()       
         self.bias = torch.nn.Parameter(
             torch.empty(num_features, **factory_kwargs))
-        torch.nn.init.ones_(self.bias) 
+        torch.nn.init.zeros_(self.bias) 
         self.register_buffer('t',torch.zeros(num_features))
     
     def forward(self,inputs):
         x,rexp=inputs
         self.t = Round.apply(self.bias*(2**(-rexp)))
-        self.t = self.t.clamp(-128,127)
+        # self.t = self.t.clamp(-128,127)
         if self.training:
             x = x*(2**(-rexp[None,:,None,None]))
             x = x + self.t[None,:,None,None]
-            x = x.clamp(-128,127)
+            # x = x.clamp(-128,127)
             x = x/(2**(-rexp[None,:,None,None]))
         else:
             x = x + self.t[None,:,None,None]
-            x = x.clamp(-128,127)
+            # x = x.clamp(-128,127)
 
         return x,rexp
 
@@ -87,6 +92,14 @@ class BlockQuantN(nn.Module):
         x = self.activation(x)
 
         return x
+
+
+class BlockQuantNwoA(BlockQuantN):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:
+        super(BlockQuantNwoA,self).__init__(layers_in, layers_out, kernel_size, stride, groups)
+        self.activation = nn.Sequential()
+        self.bn = BatchNorm2dBase(layers_out,outQuantBits=16)
+
 
 
 
