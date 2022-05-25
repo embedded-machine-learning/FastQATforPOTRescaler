@@ -61,7 +61,7 @@ from model_old.utils import *
 class Net2(nn.Module):
     def __init__(self):
         super(Net2, self).__init__()
-        self.start = Start(-6)
+        self.start = Start(6)
         self.stop = Stop()
         self.conv1 = BlockQuant2(1, 10, 5,1)
         self.conv2 = BlockQuant2(10, 20, 5,1)

@@ -176,7 +176,7 @@ class CamtadNetFixed(nn.Module):
         super(CamtadNetFixed, self).__init__()
 
         self.layers = nn.Sequential(
-            Start(-8),
+            Start(8),
             BlockQuant3(3, 16, 3, 2),
             BlockQuant3(16, 32, 3, 2),
             BlockQuant3(32, 64, 3, 2),
@@ -229,7 +229,7 @@ class CamtadNetFixedBiasChange(nn.Module):
         super(CamtadNetFixedBiasChange, self).__init__()
 
         self.layers = nn.Sequential(
-            Start(-8),
+            Start(8),
             BlockQuantBiasChange(3, 16, 3, 1),
             MaxPool(2,2),
             BlockQuantBiasChange(16, 32, 3, 1),
@@ -284,7 +284,7 @@ class CamtadNetFixedPool(nn.Module):
         super(CamtadNetFixedPool, self).__init__()
 
         self.layers = nn.Sequential(
-            Start(-8),
+            Start(8),
             BlockQuant3(3, 16, 3, 1),
             MaxPool(2,2),
             BlockQuant3(16, 32, 3, 1),
@@ -339,7 +339,7 @@ class CamtadNetFixedPool2(nn.Module):
         super(CamtadNetFixedPool2, self).__init__()
 
         self.layers = nn.Sequential(
-            Start(-8),
+            Start(8),
             BlockQuant4(3, 16, 3, 1),
             MaxPool(2,2),
             BlockQuant4(16, 32, 3, 1),
@@ -394,7 +394,7 @@ class CamtadNetFixedPool3(nn.Module):
         super(CamtadNetFixedPool3, self).__init__()
 
         self.layers = nn.Sequential(
-            Start(-8),
+            Start(8),
             BlockQuant4(3, 16, 3, 1),
             MaxPool(2,2),
             BlockQuant4(16, 32, 3, 1),
@@ -451,7 +451,7 @@ class CamtadNetPool3(nn.Module):
         super(CamtadNetPool3, self).__init__()
 
         self.layers = nn.Sequential(
-            Start(-8),
+            Start(8),
             BlockQuantDyn4(3, 16, 3, 1),
             MaxPool(2,2),
             BlockQuantDyn4(16, 32, 3, 1),
@@ -507,7 +507,7 @@ class CamtadNetFixed2(nn.Module):
         super(CamtadNetFixed2, self).__init__()
 
         self.layers = nn.Sequential(
-            Start(-8),
+            Start(8),
             BlockQuant4(3, 16, 3, 2),
             BlockQuant4(16, 32, 3, 2),
             BlockQuant4(32, 64, 3, 2),
