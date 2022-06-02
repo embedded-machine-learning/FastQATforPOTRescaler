@@ -6,6 +6,9 @@ env
 data/MNIST/*
 data/cifar-10-batches-py/*
 .vscode
+data_training
+data_training_V4.zip
+test_images/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

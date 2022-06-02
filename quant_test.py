@@ -2,15 +2,31 @@
 #import io
 #import json
 
+from email.policy import strict
 from torch.utils.data import DataLoader
+import torch.nn as nn
+
 #from torchvision.utils import save_image
 
 from utils.datasets import *
 from utils.utils import *
 
-from model_server.model import *
+from model.model import *
 
 from PIL import Image
+import time
+import xml.dom.minidom
+import pathlib
+import cv2
+import sys
+
+img_name = ""
+SAVE_OUT = False                #   bs => 1 , save all intermediate values
+                                #       Zeile 303 ändern
+                                #       Tom verifiziert damit
+SAVE_HARDWARE = False           #   saves npz file fpr fpga
+SAVE_ZIP = False                #   for copying
+SAVE_XML = False                #   saves for mathias 
 
 def bbox_iou(box1, box2):
     """
@@ -41,6 +57,7 @@ def bbox_iou(box1, box2):
     return iou
 
 def get_boxes(pred_boxes, pred_conf):
+
     n = pred_boxes.size(0)
     FloatTensor = torch.cuda.FloatTensor if pred_boxes.is_cuda else torch.FloatTensor
     p_boxes = FloatTensor(n, 4)
@@ -51,11 +68,231 @@ def get_boxes(pred_boxes, pred_conf):
 
     return p_boxes
 
-           
+class QTCamtadNetFixed(nn.Module):
+    def __init__(self):
+        super(QTCamtadNetFixed, self).__init__()
+
+        self.n = []
+        self.t = []
+        self.num_bits = 8
+        self.out_bits = 20
+        self.exp = 0
+        self.run = 0
+
+        self.layers = nn.Sequential(
+            
+            nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=int(np.floor(3/2)), groups=1, bias = False),
+            nn.LeakyReLU(0.125),
+            nn.MaxPool2d(2, stride=2),
+
+            nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=int(np.floor(3/2)), groups=1, bias = False),
+            nn.LeakyReLU(0.125),
+            nn.MaxPool2d(2, stride=2),
+
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=int(np.floor(3/2)), groups=1, bias = False),
+            nn.LeakyReLU(0.125),
+            nn.MaxPool2d(2, stride=2),
+
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=int(np.floor(3/2)), groups=1, bias = False),
+            nn.LeakyReLU(0.125),
+            nn.MaxPool2d(2, stride=2),
+
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=int(np.floor(3/2)), groups=1, bias = False),
+            nn.LeakyReLU(0.125),
+
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=int(np.floor(3/2)), groups=1, bias = False),
+            nn.LeakyReLU(0.125),
+
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=int(np.floor(3/2)), groups=1, bias = False),
+            nn.LeakyReLU(0.125),
+
+            nn.Conv2d(64, 36, kernel_size=1, stride=1, padding=int(np.floor(1/2)), groups=1, bias = False),
+        )
+
+        self.yololayer = YOLOLayer(
+            [[20, 20], [20, 20], [20, 20], [20, 20], [20, 20], [20, 20]])
+        
+        self.yolo_layers = [self.yololayer]
+
+    def forward(self, x):
+        if SAVE_OUT:
+            global img_name
+            img_name =  img_name.split("/")[-1].split(".")[0]
+            print(img_name)
+        img_size = x.shape[-2:]
+        # print(x.shape)
+        yolo_out, out = [], []
+
+        min_val = torch.tensor(-(1 << (self.num_bits - 1)))
+        max_val = torch.tensor((1 << (self.num_bits - 1))-1)
+
+        x = x-0.5
+        x = x.clamp(-0.5,0.5)
+
+        delta = 1.0/(2.0**(-self.run)-1)
+
+        x = x/delta
+        x = torch.floor(x)
+
+        # x = x-127
+        if torch.max(x.view(-1)) > (2**7-1) or torch.min(x.view(-1))<-2**7:
+            print("input out of bounds")
+
+        x = torch.clamp(x,min_val,max_val)
+
+        if SAVE_OUT:
+            with open("out/" + img_name + "input.npz", 'wb') as f:
+                print(x.detach().cpu().numpy().astype(np.int32).shape)
+                x.detach().cpu().numpy().astype(np.int32).tofile(f)
+                # print(self.run)
+                # print(np.max(x.detach().cpu().numpy().astype(np.int32)))
+                # print(np.min(x.detach().cpu().numpy().astype(np.int32)))
+        
+        if SAVE_OUT:
+            j = 0
+        for i, layer in enumerate(self.layers):
+            
+            if "Conv2d" in str(layer):
+                if SAVE_OUT:
+                    with open("out/" + img_name + "input_layer" + str(j) + ".npz", 'wb') as f:
+                        print("input_layer" + str(j))
+                        print(x.detach().cpu().numpy().astype(np.int32).shape)
+                        # x.detach().cpu().numpy().astype(np.int8).tofile(f)
+                        # temp = np.ascontiguousarray(x.moveaxis(1,3).detach().cpu().numpy().astype(np.int8))
+                        temp = np.ascontiguousarray(x.detach().cpu().numpy().astype(np.int32))
+                        temp.tofile(f)
+                    with open("out/" + img_name + "used_weights_layer" + str(j) + ".npz", 'wb') as f:
+                        temp = np.ascontiguousarray(layer.weight.data.detach().cpu().numpy().astype(np.int8))
+                        temp.tofile(f)
+                
+                x = layer(x)
+
+                if SAVE_OUT:
+                    with open("out/" + img_name + "output_conv_layer" + str(j) + ".npz", 'wb') as f:
+                        temp = np.ascontiguousarray(x.detach().cpu().numpy().astype(np.int32))
+                        temp.tofile(f)
+
+                x = torch.floor(x)
+                
+                x = torch.clamp(x,torch.tensor(-(1 << (self.out_bits - 1))),torch.tensor((1 << (self.out_bits - 1))-1))
+                if torch.max(torch.abs(x)) > 2**(self.out_bits-1):
+                    print("conv2d" + str(torch.max(torch.abs(x))))
+                x = x*torch.exp2(self.n[i])[None, :, None, None] + self.t[i][None, :, None, None]
+               
+                x = torch.floor(x)
+                # print("conv2d scale" + str(torch.max(torch.abs(x))))
+                if i != len(self.layers)-1:
+                    x = torch.clamp(x,min_val,max_val)
+                    # print(j)
+                else:#
+                    # print(j)
+                    x = torch.clamp(x,(-2**15),(2**15)-1)
+                    # print(torch.max(x))
+                    # print(torch.min(x))
+
+                if SAVE_OUT:
+                    with open("out/" + img_name + "n_layer" + str(j) + ".npz", 'wb') as f:
+                        temp = np.ascontiguousarray(self.n[i].detach().cpu().numpy().astype(np.int8))
+                        temp.tofile(f)
+
+                    with open("out/" + img_name + "t_layer" + str(j) + ".npz", 'wb') as f:
+                        temp = np.ascontiguousarray(self.t[i].detach().cpu().numpy().astype(np.int8))
+                        temp.tofile(f)
+                    with open("out/" + img_name + "output_layer" + str(j) + ".npz", 'wb') as f:
+                        print("output_layer" + str(j))
+                        print(x.detach().cpu().numpy().astype(np.int32).shape)
+                        # x.detach().cpu().numpy().astype(np.int32).tofile(f)
+                        # temp = np.ascontiguousarray(x.moveaxis(1,3).detach().cpu().numpy().astype(np.int32))
+                        temp = np.ascontiguousarray(x.detach().cpu().numpy().astype(np.int32))
+                        temp.tofile(f)
+                    
+                # print(x.shape)
+                # print(np.ascontiguousarray(x.detach().cpu().numpy().astype(np.int32))[0,0,0])
+                # input()
+            elif "LeakyReLU" in str(layer):
+            # elif "ReLU" in str(layer):
+                x = layer(x)
+                x = torch.floor(x)
+                # print("relu" + str(torch.max(torch.abs(x)))
+                x = torch.clamp(x,min_val,max_val)
+                if SAVE_OUT:
+                    with open("out/" + img_name + "output_relu" + str(j) + ".npz", 'wb') as f:
+                        print("output_relu" + str(j))
+                        print(x.detach().cpu().numpy().astype(np.int32).shape)
+                        # temp = np.ascontiguousarray(x.moveaxis(1,3).detach().cpu().numpy().astype(np.int8))
+                        temp = np.ascontiguousarray(x.detach().cpu().numpy().astype(np.int32))
+                        temp.tofile(f)
+                        j = j+1
+                        #x.detach().cpu().numpy().astype(np.int32).tofile(f)
+            elif "MaxPool2d" in str(layer):
+                x = layer(x)
+            else:
+                print("!!!!!!!!!!!!!!!!!!!!!!!!!")
+                print(layer)
+            
+
+        x = x/(2**-self.exp[None,:,None,None])
+        # print(self.exp)
+        x = self.yololayer(x, img_size)
+
+        yolo_out.append(x)
+
+        if self.training:  # train
+            return yolo_out
+        else:  # test
+            io, p = zip(*yolo_out)  # inference output, training output
+            return torch.cat(io, 1), p
+        return x
+
+def save_results_xml(results):
+    doc = xml.dom.minidom.Document()
+    root = doc.createElement("results")
+    
+    for i, result in enumerate(results):
+        rectangle = result[0]
+        image_e = root.appendChild(doc.createElement("image"))
+
+        doc.appendChild(root)
+        name_e = doc.createElement("filename")
+        name_t = doc.createTextNode(result[1])
+        name_e.appendChild(name_t)
+        image_e.appendChild(name_e)
+
+        size_e = doc.createElement("size")
+        node_width = doc.createElement("width")
+        node_width.appendChild(doc.createTextNode("640"))
+        node_length = doc.createElement("length")
+        node_length.appendChild(doc.createTextNode("360"))
+        size_e.appendChild(node_width)
+        size_e.appendChild(node_length)
+        image_e.appendChild(size_e)
+
+        object_node = doc.createElement("object")
+        node_bnd_box = doc.createElement("bndbox")
+        node_bnd_box_xmin = doc.createElement("xmin")
+        node_bnd_box_xmin.appendChild(doc.createTextNode(str(rectangle[0].detach().cpu().numpy())))
+        node_bnd_box_xmax = doc.createElement("xmax")
+        node_bnd_box_xmax.appendChild(doc.createTextNode(str(rectangle[1].detach().cpu().numpy())))
+        node_bnd_box_ymin = doc.createElement("ymin")
+        node_bnd_box_ymin.appendChild(doc.createTextNode(str(rectangle[2].detach().cpu().numpy())))
+        node_bnd_box_ymax = doc.createElement("ymax")
+        node_bnd_box_ymax.appendChild(doc.createTextNode(str(rectangle[3].detach().cpu().numpy())))
+        node_bnd_box.appendChild(node_bnd_box_xmin)
+        node_bnd_box.appendChild(node_bnd_box_xmax)
+        node_bnd_box.appendChild(node_bnd_box_ymin)
+        node_bnd_box.appendChild(node_bnd_box_ymax)
+
+        object_node.appendChild(node_bnd_box)
+        image_e.appendChild(object_node)
+
+    file_name =  "out/results.xml"
+    with open(file_name, "w") as fp:
+        doc.writexml(fp, indent="\t", addindent="\t", newl="\n", encoding="utf-8")
+
 if __name__ == '__main__':
 
     #Weights from training
-    weights = "weights/test_best.pt"
+    weights = "weights/qat_network.pt"
 
     #Adjustment File
     adjustmentfile = "out/adjustment.txt"
@@ -64,17 +301,23 @@ if __name__ == '__main__':
     outfile = "out/camtad.npz"
 
     #Dir for test dataa
-    path = '//binfl/lv71513/ddallinger/datasets/dac_contest_last/data_test'
+    # path = '/home/dschnoell/sources/sim2/data_training'
+    path = '/home/dschnoell/sources/sim2/test_images'
+    
+    print_images = True
 
-    batch_size = 32
+    batch_size = 256
+    if SAVE_XML or SAVE_OUT:
+        if batch_size != 1:
+            batch_size = 1
+
     img_size = 320
 
     #Use cuda if avaliable
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    # torch.cuda.set_device(1)
     #Camtad 8bit unsigned int fake quantized network
-    model = CamtadNetFixed().to(device)
-    model.setquant(0)
+    model = CamtadNetFixedPoolN2().to(device)
 
     # Load weights
     model.load_state_dict(torch.load(weights, map_location=device)['model'])
@@ -85,69 +328,76 @@ if __name__ == '__main__':
     layer_dict = {}
 
     i = 0
+    
     with open(adjustmentfile, "w") as f:
         for layer in model.layers:
             if "Start" in str(layer):
                 qtmodel.run = layer.run
                 #print(layer.run)
-            if "BlockQuant" in str(layer):
-                qtmodel.t.append(layer.bn.t)
-                qtmodel.n.append(layer.bn.inference_n)
+            elif "BlockQuantN" in str(layer):
+                # print(i)
+                qtmodel.t.append(torch.round(layer.bn.t))
+                # print(layer.bn.t)
+                qtmodel.n.append(torch.round(layer.bn.n))
+                # print(torch.round(layer.bn.inference_n)[:])
                 #print(layer.bn.t[0])
                 #print(layer.bn.inference_n[0])
-                qtmodel.layers[i].weight.data = layer.conv.used_weights.data
-                #RELU
+                qtmodel.layers[i].weight.data = torch.round(layer.conv.used_weights.data)
+                
+                #Activation
                 qtmodel.t.append(None)
                 qtmodel.n.append(None)
-                i = i+2
-            elif "Conv2dQuant" in str(layer):
-                qtmodel.layers[i].weight.data = layer.used_weights.data
-                i = i+1
+                i = i + 2 # conv + activation
+            elif "MaxPool" in str(layer):
+                qtmodel.t.append(None)
+                qtmodel.n.append(None)
+                i = i + 1
+            # elif "Conv2d" in str(layer):
+            #     qtmodel.layers[i].weight.data = torch.round(layer.used_weights.data)
+            #     i = i+1
             elif "Stop" in str(layer):
-                qtmodel.exponent = layer.exponent
+                qtmodel.exp =layer.exp
+            else:
+                print("!!!!!!!!!!!!!")
+                print(layer)
                 #print(layer.exponent[0,0,0])
-                i = i+1
-            #print()
-    # exit()
-    #             #Add weights and bias to numpy dictionary
-    #             layer_dict["w_conv"+str(j)] = qtmodel.layers[i].weight.data.detach().cpu()
-    #             layer_dict["b_conv"+str(j)] = qtmodel.layers[i].bias.data.detach().cpu()
-
-    #             if i != len(model.layers):
-    #                 if ("Conv2d") in str(qtmodel.layers[i+1]):
-    #                     activation_scale = qtmodel.input_quantizer[i+1].scale
-    #                 if ("Conv2d") in str(qtmodel.layers[i+2]):
-    #                     activation_scale = qtmodel.input_quantizer[i+2].scale
-
-    #                 adjustment = ((qtmodel.weight_quantizer[i].scale * qtmodel.input_quantizer[i].scale) / activation_scale)
-    #                 layer_dict["a_conv"+str(j)] = abs(round(math.log2(adjustment)))
+        if SAVE_HARDWARE:
+            shutil.copyfile(weights, "out/qat_network.pt")
+            #Save data to file for Hardware Team
+            f.write(str(int(qtmodel.run.detach().cpu()))+ "\n")
+            f.write(str(int(qtmodel.exp[:].detach().cpu()))+ "\n")
+            j = 0
+            for i, layer in enumerate(qtmodel.layers):
+                if "Conv2d" in str(layer):
+                    #Add weights and bias to numpy dictionary
+                    layer_dict["w_conv"+str(j)] = layer.weight.data.detach().cpu().numpy().astype(np.int8)
                     
-    #             j+=1
+                    print(qtmodel.t[i].detach().cpu().numpy().astype(np.int16))
+                    print(qtmodel.n[i][:].detach().cpu().numpy().astype(np.int8))
+                    layer_dict["b_conv"+str(j)] = qtmodel.t[i].detach().cpu().numpy().astype(np.int16)
+                    layer_dict["a_conv"+str(j)] = qtmodel.n[i][:].detach().cpu().numpy().astype(np.int8)
+                        # print(layer_dict["a_conv"+str(j)])
+                    j = j + 1
+                elif "LeakyReLU":
+                    pass
+                elif "MaxPool2d":
+                    pass
+                else:
+                    print("!!!!!!!!!!")
+                    print(layer) 
 
-    #             #If first layer add the input quantization value
-    #             if i == 0:
-    #                 # f.write(str(i) + " input: " + str(round(math.log2(qtmodel.input_quantizer[0].scale)))+ "\n")
-    #                 f.write(str(abs(round(math.log2(qtmodel.input_quantizer[0].scale))))+ "\n")
-                
-    #             # f.write(str(i) + " adjustment: " + str(round(math.log2(adjustment)))+ "\n")
-    #             f.write(str(abs(round(math.log2(adjustment))))+ "\n")
-                
-    #             #If last layer add output dequantization value
-    #             if i == 11:
-    #                 # f.write(str(i) + " output: " + str(round(math.log2(qtmodel.activation_quantizer[12].scale)))+ "\n")
-    #                 f.write(str(abs(round(math.log2(qtmodel.activation_quantizer[11].scale))))+ "\n")
+            #Save quantized network
+            torch.save(qtmodel.state_dict(), "out/quantized_net.pt")
 
-    #Save quantized network
-    torch.save(qtmodel.state_dict(), "out/quantized_net.pt")
-
-    #Save numpy dictionary for hardware repo
-    np.savez(outfile, **layer_dict)
-
+            #Save numpy dictionary for hardware repo
+            np.savez(outfile, **layer_dict)
     #-------------- Quantized Model Simultion --------------#
     # model = qtmodel
+    
     model = qtmodel
     model.nc = 1
 
+    
     # Dataloader
     dataset = LoadImagesAndLabels(path, img_size, batch_size, rect=False, cache_labels=False)
     batch_size = min(batch_size, len(dataset))
@@ -161,6 +411,7 @@ if __name__ == '__main__':
     loss = torch.zeros(3)
     iou_sum = 0
     test_n = 0
+    results = []
 
     print(('\n' + '%10s' * 4) % ('IOU', 'l', 'Giou-l', 'obj-l'))
     pbar = tqdm(enumerate(dataloader), total=len(dataloader))    
@@ -178,8 +429,9 @@ if __name__ == '__main__':
         # Disable gradients
         with torch.no_grad():
             # Run model
+            img_name = paths[0].split("/")[-1]
             inf_out, train_out = model(imgs)  # inference and training outputs
-            
+            # print(inf_out.shape)
             # Compute loss
             if hasattr(model, 'hyp'):  # if model has loss hyperparameters
                 loss += compute_loss(train_out, targets, model)[1][:3].cpu()  # GIoU, obj, cls
@@ -193,13 +445,22 @@ if __name__ == '__main__':
 
 
             pre_box = get_boxes(inf_out_t[..., :4], inf_out_t[..., 4])
-
+            
+                
             box1 = pre_box[0] / torch.Tensor([width, height, width, height]).to(device) * torch.Tensor([640,360,640,360]).to(device)
             b1_x1, b1_x2 = box1[0] - box1[2] / 2, box1[0] + box1[2] / 2
             b1_y1, b1_y2 = box1[1] - box1[3] / 2, box1[1] + box1[3] / 2
             #print bounding box
             #print(str(int(b1_x1)) + " " + str(int(b1_y1)) + " " + str(int(b1_x2))  + " " + str(int(b1_y2)) )
             #exit()
+            if SAVE_XML:
+                b1_x1 = torch.round(b1_x1)
+                b1_x2 = torch.round(b1_x2)
+                b1_y1 = torch.round(b1_y1)
+                b1_y2 = torch.round(b1_y2)
+
+            if SAVE_XML:
+                results.append([[b1_x1,b1_x2,b1_y1,b1_y2], img_name])
 
             # pre_box = get_boxes(inf_out[..., :4], inf_out[..., 4])
             tbox = targets[..., 2:6] * torch.Tensor([width, height, width, height]).to(device)
@@ -211,3 +472,9 @@ if __name__ == '__main__':
             iou = iou_sum / test_n
             s = ('%10.4f')*4 % (iou, loss_o.sum(), loss_o[0], loss_o[1])
             pbar.set_description(s)
+    # print(results)
+    if SAVE_XML:
+        # paths = [dataloader.dataset[i][2] for i, _ in enumerate(dataloader.dataset)]
+        save_results_xml(results)
+    if SAVE_ZIP:
+        shutil.make_archive("out", 'zip', "out/")

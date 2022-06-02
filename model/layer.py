@@ -38,7 +38,7 @@ class Stop(nn.Module):
     def __init__(self) -> None:
         super(Stop, self).__init__()
         self.size = []
-        self.register_buffer('exp',None)
+        self.register_buffer('exp',torch.zeros(1))
     def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
         x , rexp = invals
         self.exp = rexp

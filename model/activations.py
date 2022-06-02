@@ -11,7 +11,7 @@ class LeakReLU(torch.nn.LeakyReLU):
         super().__init__(negative_slope, inplace)
     def forward(self,input: Tuple[torch.Tensor,torch.Tensor]):
         x,rexp = input
-        x = F.relu(x, inplace=self.inplace)
+        x = F.leaky_relu(x, inplace=self.inplace)
         if self.training:
             x = x*(2**(-rexp[None,:,None,None]))
             x = Floor.apply(x)
