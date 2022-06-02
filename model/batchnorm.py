@@ -23,6 +23,19 @@ def calculate_n(weight: torch.Tensor,
         nr = torch.round(n)+rexp.view(-1)
         return nr
 
+def calculate_n_fixed(weight: torch.Tensor,
+                bias: torch.Tensor,
+                mean: torch.Tensor,
+                var: torch.Tensor,
+                in_quant: torch.Tensor,
+                out_quant: torch.Tensor,
+                rexp: torch.Tensor) -> torch.Tensor:
+    with torch.no_grad():
+        n = torch.log2(in_quant/out_quant*weight/torch.sqrt(var+1e-5))
+        nr = torch.round(n)+rexp.view(-1)
+        nr = torch.median(nr)*torch.ones_like(nr)
+        return nr
+
 
 def calculate_t(weight: torch.Tensor,
                 bias: torch.Tensor,
@@ -32,7 +45,7 @@ def calculate_t(weight: torch.Tensor,
                 out_quant: torch.Tensor,
                 rexp: torch.Tensor) -> torch.Tensor:
     with torch.no_grad():
-        t = -mean*(weight)/(torch.sqrt(var+1e-5) * out_quant) + bias/out_quant
+        t = torch.round(-mean*(weight)/(torch.sqrt(var+1e-5) * out_quant) + bias/out_quant)
         return t
 
 
@@ -56,9 +69,37 @@ def calculate_alpha(weight: torch.Tensor,
         alpha = torch.where(cond1, alpha, alpha/2)
         alpha = torch.where(cond2, alpha, alpha*2)
         alpha = alpha.clamp(0.2, 1.06)
+        
         var = var*torch.square(alpha/alpha_old)
         mean = mean*alpha/alpha_old
     return alpha, var, mean
+
+def calculate_alpha_fixed(weight: torch.Tensor,
+                    bias: torch.Tensor,
+                    mean: torch.Tensor,
+                    var: torch.Tensor,
+                    in_quant: torch.Tensor,
+                    out_quant: torch.Tensor,
+                    rexp: torch.Tensor,
+                    n: torch.Tensor,
+                    alpha_old: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    with torch.no_grad():
+        mom = 0.99
+        var_new = (weight*in_quant/out_quant).square() * torch.exp2(-2*(n-rexp))-1e-5
+        alpha = torch.sqrt(var_new/var)
+        alpha = alpha.masked_fill(torch.isnan(alpha), 1)
+        alpha = mom*alpha_old + (1-mom)*alpha*alpha_old
+        if torch.any(alpha > 1.05):
+            alpha = alpha/2.0
+        if torch.all(alpha < 0.4):
+            alpha = alpha*2.0
+        alpha = alpha.clamp(0, 1.1)
+
+        var = var*torch.square(alpha/alpha_old)
+        mean = mean*alpha/alpha_old
+    return alpha, var, mean
+
+
 
 
 #########################################################################################
@@ -160,6 +201,11 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
                 rexp = torch.log2(self.out_quant.delta)
             return xorig, rexp
 
+class BatchNorm2dBase_fixed(BatchNorm2dBase):
+    def __init__(self, num_features, eps=0.00001, momentum=0.1, affine=True, track_running_stats=True, device=None, dtype=None, outQuantBits=8, outQuantDyn=False):
+        super(BatchNorm2dBase_fixed,self).__init__(num_features, eps, momentum, affine, track_running_stats, device, dtype, outQuantBits, outQuantDyn)
+        self.func_n = calculate_n_fixed
+        self.func_a = calculate_alpha_fixed
 #########################################################################################
 #                                   OLD                                                 #
 #########################################################################################

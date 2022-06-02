@@ -72,12 +72,12 @@ class Bias(nn.Module):
         return x,rexp
 
 class BlockQuantN(nn.Module):
-    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1,outQuantDyn=False) -> None:
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1,outQuantBits=8,outQuantDyn=False) -> None:
         super(BlockQuantN, self).__init__()
 
         self.conv = Conv2dLinChannelQuant(layers_in, layers_out, kernel_size, stride, padding=int(
             np.floor(kernel_size/2)), groups=groups)
-        self.bn = BatchNorm2dBase(layers_out,outQuantDyn=outQuantDyn)
+        self.bn = BatchNorm2dBase(layers_out,outQuantBits=outQuantBits,outQuantDyn=outQuantDyn)
         self.activation = LeakReLU(0.125)
 
     def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
@@ -92,12 +92,14 @@ class BlockQuantN(nn.Module):
 
 
 class BlockQuantNwoA(BlockQuantN):
-    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:
-        super(BlockQuantNwoA,self).__init__(layers_in, layers_out, kernel_size, stride, groups)
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
+        super(BlockQuantNwoA,self).__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
         self.activation = nn.Sequential()
-        self.bn = BatchNorm2dBase(layers_out,outQuantBits=16)
 
-
+class BlockQuantNwoA_fixed(BlockQuantNwoA):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
+        super().__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
+        
 
 
 #########################################################################################
