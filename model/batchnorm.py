@@ -66,7 +66,7 @@ def calculate_alpha(weight: torch.Tensor,
 #########################################################################################
 
 class BatchNorm2dBase(torch.nn.BatchNorm2d):
-    def __init__(self, num_features, eps=0.00001, momentum=0.1, affine=True, track_running_stats=True, device=None, dtype=None, outQuantBits=8):
+    def __init__(self, num_features, eps=0.00001, momentum=0.1, affine=True, track_running_stats=True, device=None, dtype=None, outQuantBits=8, outQuantDyn=False):
         super(BatchNorm2dBase, self).__init__(num_features, eps, momentum,
                                               affine, track_running_stats, device, dtype)
 
@@ -78,7 +78,7 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
         self.func_t = calculate_t
         self.func_a = calculate_alpha
 
-        self.out_quant = LinQuantExpScale(outQuantBits, (-1,), 0.1, 0)
+        self.out_quant = LinQuantExpScale(outQuantBits, (1,num_features,1,1) if outQuantDyn else (-1,), 0.1, 0)
         self.register_buffer('in_quant',    torch.ones(num_features,1,1,1))
         self.register_buffer('rexp',        torch.zeros(1))
         self.register_buffer('weights_sign', torch.ones(num_features))
@@ -129,7 +129,7 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
                     self.n-rexp.view(-1))[None, :, None, None] + self.t[None, :, None, None]
                 xorig = torch.floor(xorig)
                 xorig = torch.clamp(xorig, -(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1)
-                xorig = xorig*self.out_quant.delta[None, :, None, None]
+                xorig = xorig*self.out_quant.delta
                 rexp = torch.log2(self.out_quant.delta)
             if torch.any(torch.isnan(x)) or torch.any(torch.isnan(xorig)):
                 print("batchnorm out is nan") 

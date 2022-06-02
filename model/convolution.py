@@ -19,11 +19,17 @@ class Conv2dLayerLinQuant(nn.Conv2d):
         input, rexp = invals
         # tmp = (self.weight) / \
         #     torch.sqrt(self.weight.var([1, 2, 3], unbiased=False)[:,None,None,None]+1e-5)
-        tmp = self.weight
-        tmp = self.quantw(tmp,factor)
-        rexp=rexp[0]    # this is ugly 
-        rexp = rexp.view(-1)
 
+        tmp = self.weight
+
+        orexp=torch.round(torch.mean(rexp)).squeeze()
+        rexp_diff = rexp.squeeze()-orexp.unsqueeze(-1)
+
+        tmp = tmp*(2**rexp_diff)[None,:,None,None]
+        
+
+        tmp = self.quantw(tmp,factor)
+        
         if not self.training:
             tmp = tmp/self.quantw.delta
             self.used_weights = tmp
@@ -32,7 +38,7 @@ class Conv2dLayerLinQuant(nn.Conv2d):
             print(torch.max(torch.abs(self.weight.data.view(-1))))
             print(factor)
         # tmp=checkNan.apply(tmp)
-        return self._conv_forward(input, tmp, None),rexp
+        return self._conv_forward(input, tmp, None),orexp
 
 class Conv2dLinChannelQuant(Conv2dLayerLinQuant):
     def __init__(self, in_channels: int, out_channels: int, kernel_size: _size_2_t, stride: _size_2_t = 1, padding: Union[str, _size_2_t] = 0, dilation: _size_2_t = 1, groups: int = 1, bias: bool = False, padding_mode: str = 'zeros', device=None, dtype=None) -> None:

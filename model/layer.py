@@ -18,7 +18,7 @@ from model.activations import *
 class Start(nn.Module):
     def __init__(self, running_exp_init) -> None:
         super(Start, self).__init__()
-        self.register_buffer('run',torch.tensor([-running_exp_init]))
+        self.register_buffer('run',torch.tensor([-running_exp_init],dtype=torch.float))
         self.delta = 1.0/(2.0**(running_exp_init)-1)
     def forward(self, x):
         rexp=self.run
@@ -58,30 +58,27 @@ class Bias(nn.Module):
     
     def forward(self,inputs):
         x,rexp=inputs
-        self.t = Round.apply(self.bias*(2**(-rexp)))
+        self.t = Round.apply(self.bias[None,:,None,None]*(2**(-rexp)))
         # self.t = self.t.clamp(-128,127)
         if self.training:
-            x = x*(2**(-rexp[None,:,None,None]))
-            x = x + self.t[None,:,None,None]
+            x = x*(2**(-rexp))
+            x = x + self.t
             # x = x.clamp(-128,127)
-            x = x/(2**(-rexp[None,:,None,None]))
+            x = x/(2**(-rexp))
         else:
-            x = x + self.t[None,:,None,None]
+            x = x + self.t
             # x = x.clamp(-128,127)
 
         return x,rexp
 
 class BlockQuantN(nn.Module):
-    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1) -> None:
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1,outQuantDyn=False) -> None:
         super(BlockQuantN, self).__init__()
 
         self.conv = Conv2dLinChannelQuant(layers_in, layers_out, kernel_size, stride, padding=int(
             np.floor(kernel_size/2)), groups=groups)
-        self.bn = BatchNorm2dBase(layers_out)
+        self.bn = BatchNorm2dBase(layers_out,outQuantDyn=outQuantDyn)
         self.activation = LeakReLU(0.125)
-
-        self.first_old_exp = True
-        self.old_exp = 0
 
     def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
         
