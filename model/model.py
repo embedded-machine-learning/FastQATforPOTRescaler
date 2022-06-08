@@ -114,6 +114,13 @@ class CamtadNetFixedPoolN(nn.Module):
             [[20, 20], [20, 20], [20, 20], [20, 20], [20, 20], [20, 20]])
         self.yolo_layers = [self.yololayer]
 
+    def convert(self):
+        new_layers = nn.Sequential()
+        for i in self.layers:
+            print(i)
+            new_layers.append(i.convert())
+
+        self.layers = new_layers
 
     def set(self, val):
         # just here for compatability

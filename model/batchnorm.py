@@ -105,6 +105,23 @@ def calculate_alpha_fixed(weight: torch.Tensor,
 #########################################################################################
 #                                   CLASSES                                             #
 #########################################################################################
+class BatchNorm2d_(torch.nn.Module):
+    def __init__(self,num_features,n: torch.Tensor,t: torch.Tensor,outQuantBits) -> None:
+        super(BatchNorm2d_,self).__init__()
+        self.num_features = num_features
+        self.outQuantBits = outQuantBits
+        self.register_parameter("bias",nn.Parameter(t.clone().float(),requires_grad=True))
+        self.register_buffer("t",t.clone())
+        self.register_buffer("n",n.clone().requires_grad_(False))
+
+    def forward(self,x:torch.Tensor) -> torch.Tensor:
+        self.t = Round.apply(self.bias.clamp(-2**(self.outQuantBits-1),2**(self.outQuantBits-1)-1))
+        x = x * torch.exp2(self.n)[None,:,None,None]+self.t[None,:,None,None]
+        x = x.clamp(-2**(self.outQuantBits-1),2**(self.outQuantBits-1)-1)
+        return x
+
+
+
 
 class BatchNorm2dBase(torch.nn.BatchNorm2d):
     def __init__(self, num_features, eps=0.00001, momentum=0.1, affine=True, track_running_stats=True, device=None, dtype=None, outQuantBits=8, outQuantDyn=False):
@@ -125,6 +142,9 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
         self.register_buffer('rexp',        torch.tensor(0.))
         self.register_buffer('weights_sign', torch.ones(num_features))
         self.outQuantBits=outQuantBits
+    
+    def convert(self):
+        return BatchNorm2d_(self.num_features,self.n,self.t,self.outQuantBits)
 
     def get_weight_factor(self):
         if self.training:

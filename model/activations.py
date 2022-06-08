@@ -6,6 +6,14 @@ from torch.nn.common_types import _size_any_t
 
 from model.utils import *
 
+class LeakReLU_(torch.nn.LeakyReLU):
+    def __init__(self, negative_slope: float = 0.01, inplace: bool = False) -> None:
+        super(LeakReLU_,self).__init__(negative_slope, inplace)
+    def forward(self,x: torch.Tensor):
+        x = F.leaky_relu(x, inplace=self.inplace)
+        x = Floor.apply(x)
+        return x
+
 class LeakReLU(torch.nn.LeakyReLU):
     def __init__(self, negative_slope: float = 0.01, inplace: bool = False) -> None:
         super().__init__(negative_slope, inplace)
@@ -19,3 +27,6 @@ class LeakReLU(torch.nn.LeakyReLU):
         else:
             x = Floor.apply(x)
         return x,rexp
+
+    def convert(self):
+        return LeakReLU_(self.negative_slope,self.inplace)
