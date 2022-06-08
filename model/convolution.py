@@ -47,6 +47,13 @@ class Conv2dLinChannelQuant(Conv2dLayerLinQuant):
 
         self.quantw = LinQuant(8,(out_channels,1,1,1),0.1,0)
 
+class Conv2dLinChannelQuant_lowpres(Conv2dLayerLinQuant):
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: _size_2_t, stride: _size_2_t = 1, padding: Union[str, _size_2_t] = 0, dilation: _size_2_t = 1, groups: int = 1, bias: bool = False, padding_mode: str = 'zeros', device=None, dtype=None) -> None:
+        super(Conv2dLinChannelQuant_lowpres, self).__init__(in_channels, out_channels, kernel_size,
+                                          stride, padding, dilation, groups, bias, padding_mode, device, dtype)
+
+        self.quantw = LinQuant(4,(out_channels,1,1,1),0.1,0)
+
 class Conv2dExpLayerQuant(Conv2dLayerLinQuant):
     def __init__(self, in_channels: int, out_channels: int, kernel_size: _size_2_t, stride: _size_2_t = 1, padding: Union[str, _size_2_t] = 0, dilation: _size_2_t = 1, groups: int = 1, bias: bool = False, padding_mode: str = 'zeros', device=None, dtype=None) -> None:
         super(Conv2dExpLayerQuant, self).__init__(in_channels, out_channels, kernel_size,

@@ -119,9 +119,10 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
         self.func_t = calculate_t
         self.func_a = calculate_alpha
 
-        self.out_quant = LinQuantExpScale(outQuantBits, (1,num_features,1,1) if outQuantDyn else (-1,), 0.1, 0)
+        self.out_quant = LinQuantExpScale(outQuantBits,(1,num_features,1,1) if outQuantDyn else (-1,), 0.1, 0)
+
         self.register_buffer('in_quant',    torch.ones(num_features,1,1,1))
-        self.register_buffer('rexp',        torch.zeros(1))
+        self.register_buffer('rexp',        torch.tensor(0.))
         self.register_buffer('weights_sign', torch.ones(num_features))
         self.outQuantBits=outQuantBits
 

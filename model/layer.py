@@ -90,6 +90,22 @@ class BlockQuantN(nn.Module):
 
         return x
 
+class BlockQuantN_fixed(BlockQuantN):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
+        super(BlockQuantN_fixed,self).__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
+        self.bn = BatchNorm2dBase_fixed(layers_out,outQuantBits=outQuantBits,outQuantDyn=outQuantDyn)
+
+class BlockQuantN_lowpres(BlockQuantN):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
+        super(BlockQuantN_lowpres,self).__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
+        self.conv = Conv2dLinChannelQuant_lowpres(layers_in, layers_out, kernel_size, stride, padding=int(
+            np.floor(kernel_size/2)), groups=groups)
+        
+class BlockQuantNwoA_lowpres(BlockQuantN_lowpres):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
+        super(BlockQuantNwoA_lowpres,self).__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
+        self.activation = nn.Sequential()
+
 
 class BlockQuantNwoA(BlockQuantN):
     def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
@@ -98,7 +114,7 @@ class BlockQuantNwoA(BlockQuantN):
 
 class BlockQuantNwoA_fixed(BlockQuantNwoA):
     def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
-        super().__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
+        super(BlockQuantNwoA_fixed,self).__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
         
 
 
