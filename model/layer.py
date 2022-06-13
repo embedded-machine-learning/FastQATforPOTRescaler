@@ -14,12 +14,24 @@ from model.activations import *
 #########################################################################################
 #                                   CLASSES                                             #
 #########################################################################################
+class Start_(nn.Module):
+    def __init__(self, run,delta) -> None:
+        super(Start_, self).__init__()
+        self.register_buffer('run',run.clone())
+        self.delta = delta
+    def forward(self, x):
+        rexp=self.run
+        x = x/self.delta
+        x = Floor.apply(x)
+        return x
 
 class Start(nn.Module):
     def __init__(self, running_exp_init) -> None:
         super(Start, self).__init__()
         self.register_buffer('run',torch.tensor([-running_exp_init],dtype=torch.float))
         self.delta = 1.0/(2.0**(running_exp_init)-1)
+    def convert(self):
+        return Start_(self.run,self.delta)
     def forward(self, x):
         rexp=self.run
         # x = x*(2**(-rexp[None,:,None,None]))
@@ -33,12 +45,23 @@ class Start(nn.Module):
             # print("min,med,max(t):" , torch.min(x),torch.mean(x),torch.max(x))
         return (x, rexp)
 
+class Stop_(nn.Module):
+    def __init__(self,rexp: torch.Tensor()) -> None:
+        super(Stop_, self).__init__()
+        self.register_buffer("rexp",rexp.clone())
 
+    def forward(self, x: torch.Tensor):
+        x = x/(2**-self.rexp[None,:,None,None])
+        x = checkNan.apply(x)       # removes nan from backprop
+        return x
+    
 class Stop(nn.Module):
     def __init__(self) -> None:
         super(Stop, self).__init__()
         self.size = []
         self.register_buffer('exp',torch.zeros(1))
+    def convert(self):
+        return Stop_(self.exp)
     def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
         x , rexp = invals
         self.exp = rexp
@@ -71,6 +94,22 @@ class Bias(nn.Module):
 
         return x,rexp
 
+class BlockQuantN_(nn.Module):
+    def __init__(self,conv,bn,act) -> None:
+        super(BlockQuantN_,self).__init__()
+        self.conv = conv.convert()
+        self.bn   = bn.convert()
+        if type(act)!= nn.Sequential:
+            self.activation = act.convert()
+        else:
+            self.activation = act
+    def forward(self, x :torch.Tensor):
+        x = self.conv(x)
+        x = self.bn(x)
+        x = self.activation(x)
+        return x
+
+
 class BlockQuantN(nn.Module):
     def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1,outQuantBits=8,outQuantDyn=False) -> None:
         super(BlockQuantN, self).__init__()
@@ -80,6 +119,9 @@ class BlockQuantN(nn.Module):
         self.bn = BatchNorm2dBase(layers_out,outQuantBits=outQuantBits,outQuantDyn=outQuantDyn)
         self.activation = LeakReLU(0.125)
 
+    def convert(self):
+        return BlockQuantN_(self.conv,self.bn,self.activation)
+        
     def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
         
         fact = self.bn.get_weight_factor()
@@ -90,6 +132,22 @@ class BlockQuantN(nn.Module):
 
         return x
 
+class BlockQuantN_fixed(BlockQuantN):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
+        super(BlockQuantN_fixed,self).__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
+        self.bn = BatchNorm2dBase_fixed(layers_out,outQuantBits=outQuantBits,outQuantDyn=outQuantDyn)
+
+class BlockQuantN_lowpres(BlockQuantN):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
+        super(BlockQuantN_lowpres,self).__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
+        self.conv = Conv2dLinChannelQuant_lowpres(layers_in, layers_out, kernel_size, stride, padding=int(
+            np.floor(kernel_size/2)), groups=groups)
+        
+class BlockQuantNwoA_lowpres(BlockQuantN_lowpres):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
+        super(BlockQuantNwoA_lowpres,self).__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
+        self.activation = nn.Sequential()
+
 
 class BlockQuantNwoA(BlockQuantN):
     def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
@@ -98,7 +156,7 @@ class BlockQuantNwoA(BlockQuantN):
 
 class BlockQuantNwoA_fixed(BlockQuantNwoA):
     def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
-        super().__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
+        super(BlockQuantNwoA_fixed,self).__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
         
 
 
@@ -304,6 +362,9 @@ class MaxPool(nn.MaxPool2d):
     def __init__(self, kernel_size: _size_any_t, stride: Optional[ _size_any_t] = None, padding:  _size_any_t = 0, dilation:  _size_any_t = 1, return_indices: bool = False, ceil_mode: bool = False) -> None:
         super(MaxPool,self).__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)
     
+    def convert(self):
+        return nn.MaxPool2d(self.kernel_size,self.stride,self.padding,self.dilation,self.return_indices,self.ceil_mode)
+
     def forward(self, input: Tuple[torch.Tensor,torch.Tensor]):
         val,rexp = input
         return  (F.max_pool2d(val, self.kernel_size, self.stride,

@@ -114,6 +114,13 @@ class CamtadNetFixedPoolN(nn.Module):
             [[20, 20], [20, 20], [20, 20], [20, 20], [20, 20], [20, 20]])
         self.yolo_layers = [self.yololayer]
 
+    def convert(self):
+        new_layers = nn.Sequential()
+        for i in self.layers:
+            print(i)
+            new_layers.append(i.convert())
+
+        self.layers = new_layers
 
     def set(self, val):
         # just here for compatability
@@ -165,10 +172,225 @@ class CamtadNetFixedPoolN2(CamtadNetFixedPoolN):
             BlockQuantN(64, 64, 3, 1),
             BlockQuantN(64, 64, 3, 1),
             # Conv2dExpLayerQuantAdaptExp(64, 36, 1, 1),
-            BlockQuantNwoA(64,36,1,1),
+            BlockQuantNwoA(64,36,1,1,outQuantBits=16),
             # Bias(36),
             Stop()
         )
+
+class CamtadNetFixedPoolN2_highpres_fixed(CamtadNetFixedPoolN):
+    def __init__(self):
+        super(CamtadNetFixedPoolN2_highpres_fixed, self).__init__()
+
+        self.layers = nn.Sequential(
+            Start(8),
+            BlockQuantN_fixed(3, 16, 3, 1,outQuantBits=16),
+            MaxPool(2,2),
+            BlockQuantN_fixed(16, 32, 3, 1,outQuantBits=16),
+            MaxPool(2,2),
+            BlockQuantN_fixed(32, 64, 3, 1,outQuantBits=16),
+            MaxPool(2,2),
+            BlockQuantN_fixed(64, 64, 3, 1,outQuantBits=16),
+            MaxPool(2,2),
+            BlockQuantN_fixed(64, 64, 3, 1,outQuantBits=16),
+            BlockQuantN_fixed(64, 64, 3, 1,outQuantBits=16),
+            BlockQuantN_fixed(64, 64, 3, 1,outQuantBits=16),
+            # Conv2dExpLayerQuantAdaptExp(64, 36, 1, 1),
+            BlockQuantNwoA_fixed(64,36,1,1,outQuantBits=16),
+            # Bias(36),
+            Stop()
+        )
+
+class CamtadNetFixedPoolN2_lowpres(CamtadNetFixedPoolN):
+    def __init__(self):
+        super(CamtadNetFixedPoolN2_lowpres, self).__init__()
+
+        self.layers = nn.Sequential(
+            Start(8),
+            BlockQuantN_lowpres(3, 16, 3, 1,outQuantBits=8),
+            MaxPool(2,2),
+            BlockQuantN_lowpres(16, 32, 3, 1,outQuantBits=8),
+            MaxPool(2,2),
+            BlockQuantN_lowpres(32, 64, 3, 1,outQuantBits=8),
+            MaxPool(2,2),
+            BlockQuantN_lowpres(64, 64, 3, 1,outQuantBits=8),
+            MaxPool(2,2),
+            BlockQuantN_lowpres(64, 64, 3, 1,outQuantBits=8),
+            BlockQuantN_lowpres(64, 64, 3, 1,outQuantBits=8),
+            BlockQuantN_lowpres(64, 64, 3, 1,outQuantBits=8),
+            # Conv2dExpLayerQuantAdaptExp(64, 36, 1, 1),
+            BlockQuantNwoA_lowpres(64,36,1,1,outQuantBits=16),
+            # Bias(36),
+            Stop()
+        )
+
+class CamtadNetFixedPoolN2_lowpres_2(CamtadNetFixedPoolN):
+    def __init__(self):
+        super(CamtadNetFixedPoolN2_lowpres_2, self).__init__()
+
+        self.layers = nn.Sequential(
+            Start(8),
+            BlockQuantN(3, 16, 3, 1,outQuantBits=8),
+            MaxPool(2,2),
+            BlockQuantN_lowpres(16, 32, 3, 1,outQuantBits=8),
+            MaxPool(2,2),
+            BlockQuantN_lowpres(32, 64, 3, 1,outQuantBits=4),
+            MaxPool(2,2),
+            BlockQuantN_lowpres(64, 64, 3, 1,outQuantBits=4),
+            MaxPool(2,2),
+            BlockQuantN_lowpres(64, 64, 3, 1,outQuantBits=4),
+            BlockQuantN_lowpres(64, 64, 3, 1,outQuantBits=8),
+            BlockQuantN(64, 64, 3, 1,outQuantBits=8),
+            # Conv2dExpLayerQuantAdaptExp(64, 36, 1, 1),
+            BlockQuantNwoA(64,36,1,1,outQuantBits=16),
+            # Bias(36),
+            Stop()
+        )
+
+class CamtadNetFixedPoolN2_DynOut(CamtadNetFixedPoolN):
+    def __init__(self):
+        super(CamtadNetFixedPoolN2_DynOut, self).__init__()
+
+        self.layers = nn.Sequential(
+            Start(8),
+            BlockQuantN(3, 16, 3, 1,outQuantDyn=True),
+            MaxPool(2,2),
+            BlockQuantN(16, 32, 3, 1,outQuantDyn=True),
+            MaxPool(2,2),
+            BlockQuantN(32, 64, 3, 1,outQuantDyn=True),
+            MaxPool(2,2),
+            BlockQuantN(64, 64, 3, 1,outQuantDyn=True),
+            MaxPool(2,2),
+            BlockQuantN(64, 64, 3, 1,outQuantDyn=True),
+            BlockQuantN(64, 64, 3, 1,outQuantDyn=True),
+            BlockQuantN(64, 64, 3, 1,outQuantDyn=True),
+            # Conv2dExpLayerQuantAdaptExp(64, 36, 1, 1),
+            BlockQuantNwoA(64,36,1,1,outQuantBits=16,outQuantDyn=False),
+            # Bias(36),
+            Stop()
+        )
+
+class CamtadNetFixedPoolN2_fixed(CamtadNetFixedPoolN2):
+    def __init__(self):
+        super(CamtadNetFixedPoolN2_fixed,self).__init__()
+        
+        self.layers = nn.Sequential(
+            Start(8),
+            BlockQuantN_fixed(3, 16, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN_fixed(16, 32, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN_fixed(32, 64, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN_fixed(64, 64, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN_fixed(64, 64, 3, 1),
+            BlockQuantN_fixed(64, 64, 3, 1),
+            BlockQuantN_fixed(64, 64, 3, 1),
+            # Conv2dExpLayerQuantAdaptExp(64, 36, 1, 1),
+            BlockQuantNwoA_fixed(64,36,1,1,outQuantBits=16),
+            # Bias(36),
+            Stop()
+        )
+
+class CamtadNetFixedPoolN2_split(CamtadNetFixedPoolN):
+    def __init__(self):
+        super(CamtadNetFixedPoolN2_split, self).__init__()
+
+        self.layers = nn.Sequential(
+            Start(8),
+            BlockQuantN(3, 16, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN(16, 16, 3, 1,groups=16),
+            BlockQuantN(16, 32, 1, 1),
+            MaxPool(2,2),
+            BlockQuantN(32, 64, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN(64, 64, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN(64, 64, 3, 1),
+            BlockQuantN(64, 64, 3, 1),
+            BlockQuantN(64, 64, 3, 1),
+            # Conv2dExpLayerQuantAdaptExp(64, 36, 1, 1),
+            BlockQuantNwoA(64,36,1,1,outQuantBits=16),
+            # Bias(36),
+            Stop()
+        )
+
+class CamtadNetFixedPoolN2_split2(CamtadNetFixedPoolN):
+    def __init__(self):
+        super(CamtadNetFixedPoolN2_split2, self).__init__()
+
+        self.layers = nn.Sequential(
+            Start(8),
+            BlockQuantN(3, 16, 3, 1),
+            MaxPool(2,2),
+            BlockQuantNwoA(16, 16, 3, 1,groups=16),
+            BlockQuantN(16, 32, 1, 1),
+            MaxPool(2,2),
+            BlockQuantN(32, 64, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN(64, 64, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN(64, 64, 3, 1),
+            BlockQuantN(64, 64, 3, 1),
+            BlockQuantN(64, 64, 3, 1),
+            # Conv2dExpLayerQuantAdaptExp(64, 36, 1, 1),
+            BlockQuantNwoA(64,36,1,1,outQuantBits=16),
+            # Bias(36),
+            Stop()
+        )
+
+class CamtadNetFixedPoolN2_split2_fixed(CamtadNetFixedPoolN):
+    def __init__(self):
+        super(CamtadNetFixedPoolN2_split2_fixed, self).__init__()
+
+        self.layers = nn.Sequential(
+            Start(8),
+            BlockQuantN_fixed(3, 16, 3, 1),
+            MaxPool(2,2),
+            BlockQuantNwoA_fixed(16, 16, 3, 1,groups=16),
+            BlockQuantN_fixed(16, 32, 1, 1),
+            MaxPool(2,2),
+            BlockQuantN_fixed(32, 64, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN_fixed(64, 64, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN_fixed(64, 64, 3, 1),
+            BlockQuantN_fixed(64, 64, 3, 1),
+            BlockQuantN_fixed(64, 64, 3, 1),
+            # Conv2dExpLayerQuantAdaptExp(64, 36, 1, 1),
+            BlockQuantNwoA_fixed(64,36,1,1,outQuantBits=16),
+            # Bias(36),
+            Stop()
+        )
+
+
+# class CamtadNetFloat_marco(CamtadNetFixedPoolN):
+#     def __init__(self):
+#         super(CamtadNetFloat_marco, self).__init__()
+
+#         self.layers = nn.Sequential(
+#             nn.Sequential(),
+#             BlockRelu(3, 16, 3, 1),
+#             nn.MaxPool2d(2,2),
+#             BlockRelu(16, 32, 3, 1),
+#             nn.MaxPool2d(2,2),
+#             BlockRelu(32, 64, 3, 1),
+#             nn.MaxPool2d(2,2),
+#             BlockRelu(64, 64, 3, 1),
+#             nn.MaxPool2d(2,2),
+#             BlockRelu(64, 64, 3, 1),
+#             BlockRelu(64, 64, 3, 1),
+#             BlockRelu(64, 64, 3, 1),
+#             # Conv2dExpLayerQuantAdaptExp(64, 36, 1, 1),
+#             BlockReluoA(64,36,1,1),
+#             # Bias(36),
+#             nn.Sequential(),
+#         )
+
+#         self.yololayer = YOLOLayer(
+#             [[1.25, 1.25], [2.5, 2.5], [5,5], [10, 10], [20, 20], [20, 20]])
+#         self.yolo_layers = [self.yololayer]
 
 
 class CamtadNetFixedPoolN2_extended(CamtadNetFixedPoolN):
