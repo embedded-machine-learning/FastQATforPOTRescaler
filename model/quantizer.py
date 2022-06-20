@@ -12,7 +12,7 @@ from model.utils import *
 class expQuant(torch.autograd.Function):
     @staticmethod
     def forward(self, x):
-        tmp = torch.exp2(torch.round(torch.log2(x)))
+        tmp = torch.exp2(torch.floor(torch.log2(x)))
         if torch.any(torch.isnan(tmp)):
             print("nan in exp scale")
         return tmp
@@ -29,7 +29,7 @@ class LinQuant_(torch.autograd.Function):
     def forward(self, x, abs, delta):
         self.save_for_backward(x, abs)
         x = torch.clamp(x, -abs, abs)
-        x = torch.round((x)/delta)*delta
+        x = torch.floor((x)/delta)*delta
         if torch.any(torch.isnan(x)):     
             print("nan in Linquant forward")
         return x
@@ -111,7 +111,7 @@ class LinQuant(Quant):
 
             abs = abs.masked_fill(abs < 1e-6, 1e-6)
 
-            if self.take_new:
+            if self.training and self.take_new:
                 self.abs = abs
                 self.take_new = False
             elif self.training:
@@ -143,7 +143,7 @@ class LinQuantExpScale(Quant):
 
             abs = abs.masked_fill(abs < 1e-6, 1e-6)
 
-            if self.take_new:
+            if self.training and self.take_new:
                 self.abs = abs
                 self.take_new = False
             elif self.training:

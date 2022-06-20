@@ -358,6 +358,38 @@ class BlockQuantDyn4(nn.Module):
             x = Floor.apply(x)
         return x,rexp
 
+class BlockQuantNEX(nn.Module):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1,outQuantBits=8,outQuantDyn=False) -> None:
+        super(BlockQuantNEX, self).__init__()
+
+        self.conv = Conv2dLinChannelQuant(layers_in, layers_out, kernel_size, stride, padding=int(
+            np.floor(kernel_size/2)), groups=groups)
+        self.bn = BatchNorm2dBase(layers_out,outQuantBits=outQuantBits,outQuantDyn=outQuantDyn)
+        # self.activation = LeakReLU(0.125)
+        self.activation = LeakReLU(0.125)
+
+    def convert(self):
+        return BlockQuantN_(self.conv,self.bn,self.activation)
+        
+    def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
+        
+        fact = self.bn.get_weight_factor()
+        x0,rexp0 = invals
+        x = self.conv(invals, fact)
+        x = self.bn(x, self.conv.quantw.delta)
+        x = self.activation(x)
+
+        xn , rexpn = x
+        if self.training:
+            xq = xn/torch.exp2(rexpn) + x0/torch.exp2(rexp0)
+            xq = Floor.apply(xq.clamp(-128,127))
+            xq = xq*torch.exp2(rexpn)
+        else:
+            xq = (xn +x0).clamp(-128,127)
+        x = xq,rexpn
+
+        return x
+
 class MaxPool(nn.MaxPool2d):
     def __init__(self, kernel_size: _size_any_t, stride: Optional[ _size_any_t] = None, padding:  _size_any_t = 0, dilation:  _size_any_t = 1, return_indices: bool = False, ceil_mode: bool = False) -> None:
         super(MaxPool,self).__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)

@@ -45,9 +45,13 @@ class Conv2dLayerLinQuant(nn.Conv2d):
 
         tmp = self.quantw(tmp,factor)
         
+        # with torch.no_grad():
         if not self.training:
-            tmp = tmp/self.quantw.delta
+            tmp = torch.round(tmp/self.quantw.delta)
+            # only nessesary as /delta can have a slight error ~1e-6 in calculations
             self.used_weights = tmp
+        else:
+            tmp = tmp/((2**rexp_diff)[None,:,None,None])
 
         if torch.any(torch.isnan(tmp)):
             print(torch.max(torch.abs(self.weight.data.view(-1))))

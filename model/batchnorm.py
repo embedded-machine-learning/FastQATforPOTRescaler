@@ -1,3 +1,4 @@
+from operator import xor
 from typing import Tuple
 import torch
 import torch.nn as nn
@@ -118,6 +119,7 @@ class BatchNorm2d_(torch.nn.Module):
         self.t = Round.apply(self.bias.clamp(-2**(self.outQuantBits-1),2**(self.outQuantBits-1)-1))
         x = x * torch.exp2(self.n)[None,:,None,None]+self.t[None,:,None,None]
         x = x.clamp(-2**(self.outQuantBits-1),2**(self.outQuantBits-1)-1)
+        x = Floor.apply(x)
         return x
 
 
@@ -196,6 +198,7 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
             if torch.any(torch.isnan(x)) or torch.any(torch.isnan(xorig)):
                 print("batchnorm out is nan") 
             x, xorig = switch.apply(x, xorig)
+            # print("diff:" , torch.max(torch.abs(xorig-x).view(-1)))
             return x, rexp
         else:
             with torch.no_grad():
@@ -218,8 +221,11 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
                 xorig = self.weight_sign[None,:,None,None]*xorig * torch.exp2(
                     self.n)[None, :, None, None] + self.t[None, :, None, None]
                 xorig = torch.floor(xorig)
+                # if torch.any(torch.abs(xorig)>2**(self.outQuantBits-1) ):
+                #     print("had to clamp output")
                 xorig = torch.clamp(xorig, -(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1)
                 rexp = torch.log2(self.out_quant.delta)
+                
             return xorig, rexp
 
 class BatchNorm2dBase_fixed(BatchNorm2dBase):
