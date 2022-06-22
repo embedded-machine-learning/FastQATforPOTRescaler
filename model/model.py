@@ -176,6 +176,28 @@ class CamtadNetFixedPoolN2(CamtadNetFixedPoolN):
             # Bias(36),
             Stop()
         )
+class CamtadNetFixedPoolN3(CamtadNetFixedPoolN):
+    def __init__(self):
+        super(CamtadNetFixedPoolN3, self).__init__()
+
+        self.layers = nn.Sequential(
+            Start(8),
+            BlockQuantN_new(3, 16, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN_new(16, 32, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN_new(32, 64, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN_new(64, 64, 3, 1),
+            MaxPool(2,2),
+            BlockQuantN_new(64, 64, 3, 1),
+            BlockQuantN_new(64, 64, 3, 1),
+            BlockQuantN_new(64, 64, 3, 1),
+            # Conv2dExpLayerQuantAdaptExp(64, 36, 1, 1),
+            BlockQuantNwoA_new(64,36,1,1,outQuantBits=16),
+            # Bias(36),
+            Stop()
+        )
 
 class CamtadNetFixedPoolN2EX(CamtadNetFixedPoolN):
     def __init__(self):

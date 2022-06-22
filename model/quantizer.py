@@ -27,23 +27,26 @@ class expQuant(torch.autograd.Function):
 class LinQuant_(torch.autograd.Function):
     @staticmethod
     def forward(self, x, abs, delta):
-        self.save_for_backward(x, abs)
-        x = torch.clamp(x, -abs, abs)
-        x = torch.floor((x)/delta)*delta
-        if torch.any(torch.isnan(x)):     
-            print("nan in Linquant forward")
-        return x
+        with torch.no_grad():
+            self.save_for_backward(x, abs)
+            x = x.clamp_(-abs, abs)
+            x = x.div_(delta,rounding_mode="floor").mul_(delta)
+            if torch.any(torch.isnan(x)):     
+                print("nan in Linquant forward")
+            return x
+        
 
     @staticmethod
     def backward(self, grad_output: torch.Tensor):
-        x, abs = self.saved_tensors
-        grad_output = grad_output.masked_fill(torch.logical_and(
-            torch.gt(x, 2*abs), torch.gt(grad_output, 0)), 0)
-        grad_output = grad_output.masked_fill(torch.logical_and(
-            torch.le(x, -2*abs), torch.le(grad_output, 0)), 0)
-        if torch.any(torch.isnan(grad_output)):
-            print("nan in Linquant back")
-        return grad_output.detach(), None, None
+        with torch.no_grad():
+            x, abs = self.saved_tensors
+            grad_output = grad_output.masked_fill_(torch.logical_and(
+                torch.gt(x, 2*abs), torch.gt(grad_output, 0)), 0)
+            grad_output = grad_output.masked_fill_(torch.logical_and(
+                torch.le(x, -2*abs), torch.le(grad_output, 0)), 0)
+            if torch.any(torch.isnan(grad_output)):
+                print("nan in Linquant back")
+            return grad_output.detach(), None, None
 
 
 class specialExpQuant(torch.autograd.Function):

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional, Tuple
-from torch.nn.common_types import _size_any_t
+from torch.nn.common_types import _size_any_t,Tensor
 from model.batchnorm import *
 
 import numpy as np
@@ -14,6 +14,56 @@ from model.activations import *
 #########################################################################################
 #                                   CLASSES                                             #
 #########################################################################################
+
+class Startfn(torch.autograd.Function):
+    @staticmethod
+    def forward(self,x:Tensor,delta,rexp:Tensor,training:bool)->Tensor:
+        with torch.no_grad():
+            x.div_(delta,rounding_mode="floor")
+            if training:
+                x.div_(2**(-rexp))
+        return x
+    @staticmethod
+    def backward(self,x:Tensor):
+        return x.detach(),None,None,None
+
+class Stopfn(torch.autograd.Function):
+    @staticmethod
+    def forward(self,val:Tensor,rexp:Tensor,training:bool):
+        with torch.no_grad():
+            if not training:
+                val.div_(2**-rexp[None,:,None,None])
+        return val
+    @staticmethod
+    def backward(self, x:Tensor):
+        return x.detach(),None,None
+
+class Start(nn.Module):
+    def __init__(self, running_exp_init) -> None:
+        super(Start, self).__init__()
+        self.register_buffer('run',torch.tensor([-running_exp_init],dtype=torch.float))
+        self.register_buffer("delta", torch.tensor([1.0/(2.0**(-self.run)-1)]))
+    def convert(self):
+        return Start_(self.run,self.delta)
+    def forward(self, x:Tensor):
+        x = Startfn.apply(x,self.delta,self.run,self.training)
+        return x,self.run
+
+class Stop(nn.Module):
+    def __init__(self) -> None:
+        super(Stop, self).__init__()
+        self.size = []
+        self.register_buffer('exp',torch.zeros(1))
+    def convert(self):
+        return Stop_(self.exp)
+    def forward(self, invals: Tuple[Tensor, Tensor])->Tensor:
+        self.exp = invals[1]
+        x = Stopfn.apply(invals[0],invals[1],self.training)
+        x = checkNan.apply(x)       # removes nan from backprop
+        return x
+
+
+
 class Start_(nn.Module):
     def __init__(self, run,delta) -> None:
         super(Start_, self).__init__()
@@ -25,25 +75,25 @@ class Start_(nn.Module):
         x = Floor.apply(x)
         return x
 
-class Start(nn.Module):
-    def __init__(self, running_exp_init) -> None:
-        super(Start, self).__init__()
-        self.register_buffer('run',torch.tensor([-running_exp_init],dtype=torch.float))
-        self.delta = 1.0/(2.0**(running_exp_init)-1)
-    def convert(self):
-        return Start_(self.run,self.delta)
-    def forward(self, x):
-        rexp=self.run
-        # x = x*(2**(-rexp[None,:,None,None]))
-        x = x/self.delta
-        # print("delta: ", self.delta)
-        # print("min,med,max:" , torch.min(x),torch.mean(x),torch.max(x))
-        x = Floor.apply(x)
-        # print("min,med,max(pf):" , torch.min(x),torch.mean(x),torch.max(x))
-        if self.training:
-            x = x/(2**(-rexp[None,:,None,None]))
-            # print("min,med,max(t):" , torch.min(x),torch.mean(x),torch.max(x))
-        return (x, rexp)
+# class Start(nn.Module):
+#     def __init__(self, running_exp_init) -> None:
+#         super(Start, self).__init__()
+#         self.register_buffer('run',torch.tensor([-running_exp_init],dtype=torch.float))
+#         self.delta = 1.0/(2.0**(running_exp_init)-1)
+#     def convert(self):
+#         return Start_(self.run,self.delta)
+#     def forward(self, x):
+#         rexp=self.run
+#         # x = x*(2**(-rexp[None,:,None,None]))
+#         x = x/self.delta
+#         # print("delta: ", self.delta)
+#         # print("min,med,max:" , torch.min(x),torch.mean(x),torch.max(x))
+#         x = Floor.apply(x)
+#         # print("min,med,max(pf):" , torch.min(x),torch.mean(x),torch.max(x))
+#         if self.training:
+#             x = x/(2**(-rexp[None,:,None,None]))
+#             # print("min,med,max(t):" , torch.min(x),torch.mean(x),torch.max(x))
+#         return (x, rexp)
 
 class Stop_(nn.Module):
     def __init__(self,rexp: torch.Tensor()) -> None:
@@ -55,20 +105,20 @@ class Stop_(nn.Module):
         x = checkNan.apply(x)       # removes nan from backprop
         return x
     
-class Stop(nn.Module):
-    def __init__(self) -> None:
-        super(Stop, self).__init__()
-        self.size = []
-        self.register_buffer('exp',torch.zeros(1))
-    def convert(self):
-        return Stop_(self.exp)
-    def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
-        x , rexp = invals
-        self.exp = rexp
-        if not self.training:
-            x = x/(2**-rexp[None,:,None,None])
-        x = checkNan.apply(x)       # removes nan from backprop
-        return x
+# class Stop(nn.Module):
+#     def __init__(self) -> None:
+#         super(Stop, self).__init__()
+#         self.size = []
+#         self.register_buffer('exp',torch.zeros(1))
+#     def convert(self):
+#         return Stop_(self.exp)
+#     def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
+#         x , rexp = invals
+#         self.exp = rexp
+#         if not self.training:
+#             x = x/(2**-rexp[None,:,None,None])
+#         x = checkNan.apply(x)       # removes nan from backprop
+#         return x
 
 class Bias(nn.Module):
     def __init__(self, num_features, device=None, dtype=None):
@@ -132,6 +182,28 @@ class BlockQuantN(nn.Module):
 
         return x
 
+class BlockQuantN_new(nn.Module):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1,outQuantBits=8,outQuantDyn=False) -> None:
+        super(BlockQuantN_new, self).__init__()
+
+        self.conv = Conv2dLinChannelQuant(layers_in, layers_out, kernel_size, stride, padding=int(
+            np.floor(kernel_size/2)), groups=groups)
+        self.bn = BatchNorm2dBase_new(layers_out,outQuantBits=outQuantBits,outQuantDyn=outQuantDyn)
+        self.activation = LeakReLU(0.125)
+
+    def convert(self):
+        return BlockQuantN_(self.conv,self.bn,self.activation)
+        
+    def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]):
+        
+        fact = self.bn.get_weight_factor()
+
+        x = self.conv(invals, fact)
+        x = self.bn(x, self.conv.quantw.delta)
+        x = self.activation(x)
+
+        return x
+
 class BlockQuantN_fixed(BlockQuantN):
     def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
         super(BlockQuantN_fixed,self).__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
@@ -152,6 +224,11 @@ class BlockQuantNwoA_lowpres(BlockQuantN_lowpres):
 class BlockQuantNwoA(BlockQuantN):
     def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
         super(BlockQuantNwoA,self).__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
+        self.activation = nn.Sequential()
+
+class BlockQuantNwoA_new(BlockQuantN_new):
+    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False) -> None:
+        super(BlockQuantNwoA_new,self).__init__(layers_in, layers_out, kernel_size, stride, groups, outQuantBits, outQuantDyn)
         self.activation = nn.Sequential()
 
 class BlockQuantNwoA_fixed(BlockQuantNwoA):
