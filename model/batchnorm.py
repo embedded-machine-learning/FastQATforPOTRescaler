@@ -5,8 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from model.quantizer import *
-from model.utils import*
+from .quantizer import *
+from .utils import*
 #########################################################################################
 #                                   FUNCTIONS                                           #
 #########################################################################################
@@ -22,7 +22,7 @@ def calculate_n(weight: torch.Tensor,
     with torch.no_grad():
         n = torch.log2(in_quant/out_quant*weight/torch.sqrt(var+1e-5))
         nr = torch.round(n)+rexp.view(-1)
-        return nr
+        return nr.detach()
 
 def calculate_n_fixed(weight: torch.Tensor,
                 bias: torch.Tensor,
@@ -35,7 +35,7 @@ def calculate_n_fixed(weight: torch.Tensor,
         n = torch.log2(in_quant/out_quant*weight/torch.sqrt(var+1e-5))
         nr = torch.round(n)+rexp.view(-1)
         nr = torch.median(nr)*torch.ones_like(nr)
-        return nr
+        return nr.detach()
 
 
 def calculate_t(weight: torch.Tensor,
@@ -47,7 +47,7 @@ def calculate_t(weight: torch.Tensor,
                 rexp: torch.Tensor) -> torch.Tensor:
     with torch.no_grad():
         t = torch.round(-mean*(weight)/(torch.sqrt(var+1e-5) * out_quant) + bias/out_quant)
-        return t
+        return t.detach()
 
 
 def calculate_alpha(weight: torch.Tensor,
@@ -73,7 +73,7 @@ def calculate_alpha(weight: torch.Tensor,
         
         var = var*torch.square(alpha/alpha_old)
         mean = mean*alpha/alpha_old
-    return alpha, var, mean
+    return alpha.detach(), var.detach(), mean.detach()
 
 def calculate_alpha_fixed(weight: torch.Tensor,
                     bias: torch.Tensor,
@@ -98,7 +98,7 @@ def calculate_alpha_fixed(weight: torch.Tensor,
 
         var = var*torch.square(alpha/alpha_old)
         mean = mean*alpha/alpha_old
-    return alpha, var, mean
+    return alpha.detach(), var.detach(), mean.detach()
 
 
 
@@ -142,7 +142,7 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
 
         self.register_buffer('in_quant',    torch.ones(num_features,1,1,1))
         self.register_buffer('rexp',        torch.tensor(0.))
-        self.register_buffer('weights_sign', torch.ones(num_features))
+        self.register_buffer('weight_sign', torch.ones(num_features))
         self.outQuantBits=outQuantBits
     
     def convert(self):
@@ -164,10 +164,10 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor], in_quant=None) -> Tuple[torch.Tensor, torch.Tensor]:
         xorig, rexp = input
         if in_quant is not None:
-            self.in_quant = in_quant
+            self.in_quant.data = in_quant.clone()
         self.rexp=rexp
         x = super().forward(xorig.clone())
-        self.weight_sign=torch.sign(self.weight)
+        self.weight_sign.data=torch.sign(self.weight).detach()
         if self.training:
             x = self.out_quant(x)
             with torch.no_grad():
@@ -179,15 +179,15 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
                                      var=var.view(-1),
                                      in_quant=self.in_quant.view(-1),
                                      out_quant=self.out_quant.delta.view(-1),
-                                     rexp=rexp.view(-1))
+                                     rexp=rexp.view(-1)).detach()
                 self.t = self.func_t(weight=self.weight.view(-1),
                                      bias=self.bias.view(-1),
                                      mean=mean.view(-1),
                                      var=var.view(-1),
                                      in_quant=self.in_quant.view(-1),
                                      out_quant=self.out_quant.delta.view(-1),
-                                     rexp=rexp.view(-1))
-                self.t = self.t.clamp(-(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1)
+                                     rexp=rexp.view(-1)).detach()
+                self.t = self.t.clamp(-(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1).detach()
 
                 xorig = self.weight_sign[None,:,None,None]*(xorig/self.in_quant.view(-1)[None, :, None, None]) * torch.exp2(
                     self.n-rexp.view(-1))[None, :, None, None] + self.t[None, :, None, None]
@@ -210,15 +210,15 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
                                      var=self.running_var.view(-1),
                                      in_quant=self.in_quant.view(-1),
                                      out_quant=self.out_quant.delta.view(-1),
-                                     rexp=rexp.view(-1))
+                                     rexp=rexp.view(-1)).detach()
                 self.t = self.func_t(weight=self.weight.view(-1),
                                      bias=self.bias.view(-1),
                                      mean=self.running_mean.view(-1),
                                      var=self.running_var.view(-1),
                                      in_quant=self.in_quant.view(-1),
                                      out_quant=self.out_quant.delta.view(-1),
-                                     rexp=rexp.view(-1))
-                self.t = self.t.clamp(-(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1)      
+                                     rexp=rexp.view(-1)).detach()
+                self.t = self.t.clamp(-(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1).detach()      
                            
                 xorig = self.weight_sign[None,:,None,None]*xorig * torch.exp2(
                     self.n)[None, :, None, None] + self.t[None, :, None, None]
@@ -249,15 +249,15 @@ class BatchNorm2dBasefn(torch.autograd.Function):
                                 var=var.view(-1),
                                 in_quant=self.in_quant.view(-1),
                                 out_quant=self.out_quant.delta.view(-1),
-                                rexp=self.rexp.view(-1))
+                                rexp=self.rexp.view(-1)).detach()
             self.t = self.func_t(weight=self.weight.view(-1),
                                 bias=self.bias.view(-1),
                                 mean=mean.view(-1),
                                 var=var.view(-1),
                                 in_quant=self.in_quant.view(-1),
                                 out_quant=self.out_quant.delta.view(-1),
-                                rexp=self.rexp.view(-1))
-            self.t = self.t.clamp_(-(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1)
+                                rexp=self.rexp.view(-1)).detach()
+            self.t = self.t.clamp_(-(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1).detach()
             tmp = self.weight_sign[None,:,None,None]/self.in_quant.view(-1)[None, :, None, None]*torch.exp2(self.n-self.rexp.view(-1))[None, :, None, None]
             xorig = xorig.mul_(tmp).add_(self.t[None, :, None, None])
             xorig = xorig.floor_()
@@ -287,7 +287,7 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
 
         self.register_buffer('in_quant',    torch.ones(num_features,1,1,1))
         self.register_buffer('rexp',        torch.tensor(0.))
-        self.register_buffer('weights_sign', torch.ones(num_features))
+        self.register_buffer('weight_sign', torch.ones(num_features))
         self.outQuantBits=outQuantBits
 
     def get_weight_factor(self):
@@ -306,10 +306,10 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor], in_quant=None) -> Tuple[torch.Tensor, torch.Tensor]:
             xorig, rexp = input
             if in_quant is not None:
-                self.in_quant = in_quant
-            self.rexp=rexp
+                self.in_quant.data = in_quant.detach()
+            self.rexp.data=rexp.clone()
             x = super().forward(xorig.clone())
-            self.weight_sign=torch.sign(self.weight)
+            self.weight_sign.data=torch.sign(self.weight).clone()
             if self.training:
                 x = self.out_quant(x)
                 # with torch.no_grad():
@@ -352,15 +352,15 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                                         var=self.running_var.view(-1),
                                         in_quant=self.in_quant.view(-1),
                                         out_quant=self.out_quant.delta.view(-1),
-                                        rexp=rexp.view(-1))
+                                        rexp=rexp.view(-1)).detach()
                     self.t = self.func_t(weight=self.weight.view(-1),
                                         bias=self.bias.view(-1),
                                         mean=self.running_mean.view(-1),
                                         var=self.running_var.view(-1),
                                         in_quant=self.in_quant.view(-1),
                                         out_quant=self.out_quant.delta.view(-1),
-                                        rexp=rexp.view(-1))
-                    self.t = self.t.clamp_(-(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1)      
+                                        rexp=rexp.view(-1)).detach()
+                    self.t = self.t.clamp_(-(2**(self.outQuantBits-1)), 2**(self.outQuantBits-1) -1).detach()      
                             
                     xorig = xorig.mul_(self.weight_sign[None,:,None,None]*torch.exp2(
                         self.n)[None, :, None, None]).add_(self.t[None, :, None, None])

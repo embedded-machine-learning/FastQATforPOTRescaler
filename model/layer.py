@@ -3,13 +3,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional, Tuple
 from torch.nn.common_types import _size_any_t,Tensor
-from model.batchnorm import *
+from .batchnorm import *
 
 import numpy as np
 
-from model.utils import *
-from model.convolution import *
-from model.activations import *
+from .utils import *
+from .convolution import *
+from .activations import *
 
 #########################################################################################
 #                                   CLASSES                                             #
@@ -57,7 +57,7 @@ class Stop(nn.Module):
     def convert(self):
         return Stop_(self.exp)
     def forward(self, invals: Tuple[Tensor, Tensor])->Tensor:
-        self.exp = invals[1]
+        self.exp.data = invals[1].detach()
         x = Stopfn.apply(invals[0],invals[1],self.training)
         x = checkNan.apply(x)       # removes nan from backprop
         return x
@@ -453,7 +453,7 @@ class BlockQuantNEX(nn.Module):
         fact = self.bn.get_weight_factor()
         x0,rexp0 = invals
         x = self.conv(invals, fact)
-        x = self.bn(x, self.conv.quantw.delta)
+        x = self.bn(x, self.conv.quantw.delta.detach())
         x = self.activation(x)
 
         xn , rexpn = x

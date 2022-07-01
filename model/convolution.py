@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from torch.nn.common_types import _size_1_t, _size_2_t, _size_3_t
 from typing import Union, Tuple
 
-from model.quantizer import *
-from model.utils import *
+from .quantizer import *
+from .utils import *
 
 class Conv2d_(nn.Conv2d):
     def __init__(self, weights ,in_channels: int, out_channels: int, kernel_size: _size_2_t, stride: _size_2_t = 1, padding: Union[str, _size_2_t] = 0, dilation: _size_2_t = 1, groups: int = 1, bias: bool = True, padding_mode: str = 'zeros', device=None, dtype=None) -> None:
@@ -49,7 +49,7 @@ class Conv2dLayerLinQuant(nn.Conv2d):
         if not self.training:
             tmp = torch.round(tmp/self.quantw.delta)
             # only nessesary as /delta can have a slight error ~1e-6 in calculations
-            self.used_weights = tmp
+            self.used_weights = tmp.detach()
         else:
             tmp = tmp/((2**rexp_diff)[None,:,None,None])
 
@@ -105,7 +105,7 @@ class Conv2dExpLayerQuantNormWeightsAdaptExp(nn.Conv2d):
 
         if not self.training:
             tmp = tmp/self.quantw.delta
-            self.used_weights = tmp
+            self.used_weights = tmp.detach()
 
         if torch.any(torch.isnan(tmp)):
             print(torch.max(torch.abs(self.weight.data.view(-1))))

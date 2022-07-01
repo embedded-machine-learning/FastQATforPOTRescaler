@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from typing import Optional, Tuple
 from torch.nn.common_types import _size_any_t
 
-from model.utils import *
+from .utils import *
 
 class LeakReLU_(torch.nn.LeakyReLU):
     def __init__(self, negative_slope: float = 0.01, inplace: bool = False) -> None:
