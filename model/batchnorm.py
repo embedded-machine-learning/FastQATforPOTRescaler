@@ -219,7 +219,7 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
         if in_quant is not None:
             self.in_quant = in_quant.detach()
         self.rexp = rexp.detach()
-        xorig = x.clone()
+        xorig = x.detach().clone()
         x = super().forward(x)
         self.weight_sign = torch.sign(self.weight).detach()
         if self.training:

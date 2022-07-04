@@ -20,9 +20,9 @@ class Startfn(torch.autograd.Function):
     @staticmethod
     def forward(self, x: Tensor, delta, rexp: Tensor, training: bool) -> Tensor:
         with torch.no_grad():
-            x.div_(delta, rounding_mode="floor")
+            x = x.div(delta, rounding_mode="floor")
             if training:
-                x.div_(2**(-rexp))
+                x = x.div(2**(-rexp))
         return x
 
     @staticmethod
@@ -35,7 +35,7 @@ class Stopfn(torch.autograd.Function):
     def forward(self, val: Tensor, rexp: Tensor, training: bool):
         with torch.no_grad():
             if not training:
-                val.div_(2**-rexp[None, :, None, None])
+                val = val.div(2**-rexp[None, :, None, None])
         return val
 
     @staticmethod
