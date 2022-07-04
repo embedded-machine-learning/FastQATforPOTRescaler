@@ -5,26 +5,20 @@ import torch.nn.functional as F
 class Round(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input):
-        ctx.input = input
         return torch.round(input)
 
     @staticmethod
     def backward(ctx, grad_output):
-        grad_input = grad_output.clone()
-        # print("Round grad max :", torch.max(grad_input.view(-1)))
-        return grad_input
+        return grad_output
 
 class Floor(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input):
-        ctx.input = input
         return torch.floor(input)
 
     @staticmethod
     def backward(ctx, grad_output):
-        grad_input = grad_output.clone()
-        # print("Floor grad max :", torch.max(grad_input.view(-1)))
-        return grad_input
+        return grad_output
 
 class switch(torch.autograd.Function):
     @staticmethod

@@ -8,11 +8,10 @@ from .utils import *
 #           FUNCTIONS                           #
 #################################################
 
-
 class expQuant(torch.autograd.Function):
     @staticmethod
     def forward(self, x):
-        tmp = torch.exp2(torch.floor(torch.log2(x)))
+        tmp = torch.exp2(torch.ceil(torch.log2(x)))
         if torch.any(torch.isnan(tmp)):
             print("nan in exp scale")
         return tmp
@@ -30,11 +29,10 @@ class LinQuant_(torch.autograd.Function):
         with torch.no_grad():
             self.save_for_backward(x, abs)
             x = x.clamp_(-abs, abs)
-            x = x.div_(delta,rounding_mode="floor").mul_(delta)
-            if torch.any(torch.isnan(x)):     
+            x = x.div_(delta, rounding_mode="floor").mul_(delta)
+            if torch.any(torch.isnan(x)):
                 print("nan in Linquant forward")
             return x
-        
 
     @staticmethod
     def backward(self, grad_output: torch.Tensor):
@@ -57,7 +55,7 @@ class specialExpQuant(torch.autograd.Function):
         n = torch.where(cond, torch.log2(
             expQuant.apply(x)), torch.zeros_like(x))
         x = torch.where(cond, expQuant.apply(x), torch.zeros_like(x))
-        if torch.any(torch.isnan(x)):     
+        if torch.any(torch.isnan(x)):
             print("nan in specialExpQuant forward")
         return x.detach(), n.detach(), cond.detach()
 
@@ -70,7 +68,7 @@ class specialExpQuant(torch.autograd.Function):
         # only allow negative graients when smaller 2**-6 so that it can still get bigger
         grad_output = grad_output.masked_fill(torch.logical_and(
             torch.le(x, (2**-7)*1.0), torch.le(grad_output, 0)), 0)
-        if torch.any(torch.isnan(grad_output)):     
+        if torch.any(torch.isnan(grad_output)):
             print("nan in specialExpQuant backward")
         return grad_output.detach(), None, None
 
@@ -78,14 +76,15 @@ class specialExpQuant(torch.autograd.Function):
 #################################################
 #           MODULES                             #
 #################################################
+
 class Quant(nn.Module):
     def __init__(self, size) -> None:
         super(Quant, self).__init__()
         if size == (-1,):
-            self.register_buffer('delta', torch.zeros(1))
+            self.register_buffer('delta', torch.ones(1))
             self.size = (1,)
         else:
-            self.register_buffer('delta', torch.zeros(size))
+            self.register_buffer('delta', torch.ones(size))
             self.size = size
 
     def forward(self, x):
@@ -120,7 +119,8 @@ class LinQuant(Quant):
                 self.abs.data = abs.detach()
                 self.take_new = False
             elif self.training:
-                self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs + self.mom2 * (self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
+                self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs + self.mom2 *
+                            (self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
 
             self.delta.data = (2*(self.abs/(2.0**self.bits-1.0))).detach()
         return LinQuant_.apply(x*fact, self.abs, self.delta)
@@ -145,16 +145,19 @@ class LinQuantExpScale(Quant):
             # print(abs.shape)
             if torch.any(abs < 1e-6):
                 print("weights to small to quantize")
-                self.delta.data = (2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
+                self.delta.data = (
+                    2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
                 return LinQuant_.apply(x*fact, expQuant.apply(self.abs), self.delta)
-
+            # print(abs)
             abs = abs.masked_fill(abs < 1e-6, 1e-6)
 
             if self.training and self.take_new:
                 self.abs.data = abs.detach()
                 self.take_new = False
             elif self.training:
-                self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs + self.mom2 * expQuant.apply(self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
+                self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs + self.mom2 *
+                            expQuant.apply(self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
 
-            self.delta.data = (2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
+            self.delta.data = (
+                2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
         return LinQuant_.apply(x*fact, expQuant.apply(self.abs), self.delta)
