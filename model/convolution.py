@@ -50,11 +50,10 @@ class Conv2dQuant(nn.Conv2d):
     def forward(self, invals: Tuple[torch.Tensor, torch.Tensor], factor=1) -> torch.Tensor:
         input, rexp = invals
 
-        tmp = self.weight
+        tmp = self.weight.clone()
 
-        orexp = torch.round(torch.mean(rexp)).squeeze()
-        rexp_diff = rexp.squeeze()-orexp.unsqueeze(-1)
-
+        orexp = (torch.mean(rexp)).squeeze()
+        rexp_diff = rexp.squeeze() - orexp.unsqueeze(-1)
         tmp = tmp*(2**rexp_diff)[None, :, None, None]
 
         tmp = self.quantw(tmp, factor)
@@ -67,7 +66,13 @@ class Conv2dQuant(nn.Conv2d):
             tmp = tmp/((2**rexp_diff)[None, :, None, None])
 
         if torch.any(torch.isnan(tmp)):
-            print(torch.max(torch.abs(self.weight.data.view(-1))))
+            print(torch.max(torch.abs(self.weight.view(-1))))
             print(factor)
 
-        return self._conv_forward(input, tmp, None), orexp
+
+        out = self._conv_forward(input, tmp, None)
+        if torch.any(torch.isnan(out-out.round())):
+            print("WTF")
+        if not self.training and (out-out.round()).abs().max()!=0:
+            print("post convolution not whole number",(out-out.round()).mean())
+        return out, orexp

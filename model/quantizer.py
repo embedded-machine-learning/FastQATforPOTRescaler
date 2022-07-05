@@ -28,8 +28,8 @@ class LinQuant_(torch.autograd.Function):
     def forward(self, x, abs, delta):
         with torch.no_grad():
             self.save_for_backward(x, abs)
-            x = x.clamp_(-abs, abs)
-            x = x.div_(delta, rounding_mode="floor").mul_(delta)
+            x = x.clamp(-abs, abs)
+            x = x.div(delta).floor().mul(delta)
             if torch.any(torch.isnan(x)):
                 print("nan in Linquant forward")
             return x
@@ -38,9 +38,9 @@ class LinQuant_(torch.autograd.Function):
     def backward(self, grad_output: torch.Tensor):
         with torch.no_grad():
             x, abs = self.saved_tensors
-            grad_output = grad_output.masked_fill_(torch.logical_and(
+            grad_output = grad_output.masked_fill(torch.logical_and(
                 torch.gt(x, 2*abs), torch.gt(grad_output, 0)), 0)
-            grad_output = grad_output.masked_fill_(torch.logical_and(
+            grad_output = grad_output.masked_fill(torch.logical_and(
                 torch.le(x, -2*abs), torch.le(grad_output, 0)), 0)
             if torch.any(torch.isnan(grad_output)):
                 print("nan in Linquant back")
@@ -131,17 +131,20 @@ class LinQuant(Quant):
             abs = get_abs(self,x)
             if torch.any(abs < 1e-6):
                 print("weights to small to quantize")
-                self.delta.data = (2*(self.abs/(2.0**self.bits-1.0))).detach()
+                self.delta = (2*(self.abs/(2.0**self.bits-1.0))).detach()
                 return LinQuant_.apply(x*fact, self.abs, self.delta)
 
             if self.training and self.take_new:
-                self.abs.data = abs.detach()
+                self.abs = abs.detach()
                 self.take_new = False
+                # print("new taken")
             elif self.training:
+                # print(f" abs diff:  {(abs.view(-1)-self.abs.view(-1)).abs().max()}")
                 self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs + self.mom2 *
                             (self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
-
-            self.delta.data = (2*(self.abs/(2.0**self.bits-1.0))).detach()
+            # print(f" old delta: {self.delta.view(-1)}")
+            self.delta = (2*(self.abs/(2.0**self.bits-1.0))).detach()
+            # print(f" new delta: {self.delta.view(-1)}")
         # print((self.delta).shape)
         return LinQuant_.apply(x*fact, self.abs, self.delta)
 
@@ -163,20 +166,20 @@ class LinQuantExpScale(Quant):
             abs = get_abs(self,x)
             if torch.any(abs < 1e-6):
                 print("weights to small to quantize")
-                self.delta.data = (
+                self.delta = (
                     2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
                 return LinQuant_.apply(x*fact, expQuant.apply(self.abs), self.delta)
             
             # print(abs)
 
             if self.training and self.take_new:
-                self.abs.data = abs.detach()
+                self.abs = abs.detach()
                 self.take_new = False
             elif self.training:
                 self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs + self.mom2 *
                             expQuant.apply(self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
 
-            self.delta.data = (
+            self.delta = (
                 2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
 
         # print((self.delta).shape)
