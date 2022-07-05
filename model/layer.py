@@ -93,17 +93,17 @@ class Stop_(nn.Module):
 
 
 class Start(nn.Module):
-    def __init__(self, bits) -> None:
+    def __init__(self, running_exp_init) -> None:
         super(Start, self).__init__()
         self.register_buffer('run', torch.tensor(
-            [-bits], dtype=torch.float))
-        self.quant = LinQuant(bits)
+            [-running_exp_init], dtype=torch.float))
+        self.register_buffer("delta", torch.tensor([1.0/(2.0**(-self.run)-1)]))
 
     def convert(self):
         return Start_(self.run, self.delta)
 
     def forward(self, x: Tensor):
-        x = self.quant(x)
+        x = Startfn.apply(x, self.delta, self.run, self.training)
         return x, self.run
 
 
