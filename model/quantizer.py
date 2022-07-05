@@ -73,6 +73,16 @@ class specialExpQuant(torch.autograd.Function):
         return grad_output.detach(), None, None
 
 
+def get_abs(self,x:torch.Tensor)->torch.Tensor:
+    if self.simple:
+        abs = x.abs().max()
+    else:
+        xreorderd = x.permute(self.permutelist)
+        xreorderd = xreorderd.reshape((*xreorderd.shape[:self.numberofdims],-1))
+        abs = xreorderd.abs().max(dim=(self.numberofdims), keepdim=True).values.view(self.size)
+    return abs
+
+
 #################################################
 #           MODULES                             #
 #################################################
@@ -80,12 +90,25 @@ class specialExpQuant(torch.autograd.Function):
 class Quant(nn.Module):
     def __init__(self, size) -> None:
         super(Quant, self).__init__()
+        self.simple = False
         if size == (-1,):
             self.register_buffer('delta', torch.ones(1))
             self.size = (1,)
+            self.simple = True
         else:
             self.register_buffer('delta', torch.ones(size))
             self.size = size
+
+        self.permutelist = []
+        self.numberofdims = 0
+        for i in range(len(size)):
+            # print(size[i])
+            if size[i]!=1:  
+                self.permutelist.insert(0,i)
+                self.numberofdims += 1
+            else:
+                self.permutelist.append(i)
+        self.permutelist = tuple(self.permutelist)
 
     def forward(self, x):
         raise NotImplementedError()
@@ -103,17 +126,13 @@ class LinQuant(Quant):
         self.mom1 = mom1
         self.mom2 = mom2
 
-    def forward(self, x, fact=1):
+    def forward(self, x:torch.Tensor, fact=1):
         with torch.no_grad():
-            abs = torch.max(torch.abs(x.view(list(
-                self.size)+[-1])), dim=(len(self.size)), keepdim=True).values.view(self.size)
-            # print(abs.shape)
+            abs = get_abs(self,x)
             if torch.any(abs < 1e-6):
                 print("weights to small to quantize")
                 self.delta.data = (2*(self.abs/(2.0**self.bits-1.0))).detach()
                 return LinQuant_.apply(x*fact, self.abs, self.delta)
-
-            abs = abs.masked_fill(abs < 1e-6, 1e-6)
 
             if self.training and self.take_new:
                 self.abs.data = abs.detach()
@@ -123,6 +142,7 @@ class LinQuant(Quant):
                             (self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
 
             self.delta.data = (2*(self.abs/(2.0**self.bits-1.0))).detach()
+        # print((self.delta).shape)
         return LinQuant_.apply(x*fact, self.abs, self.delta)
 
 
@@ -140,16 +160,14 @@ class LinQuantExpScale(Quant):
 
     def forward(self, x, fact=1):
         with torch.no_grad():
-            abs = torch.max(torch.abs(x.view(list(
-                self.size)+[-1])), dim=(len(self.size)), keepdim=True).values.view(self.size)
-            # print(abs.shape)
+            abs = get_abs(self,x)
             if torch.any(abs < 1e-6):
                 print("weights to small to quantize")
                 self.delta.data = (
                     2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
                 return LinQuant_.apply(x*fact, expQuant.apply(self.abs), self.delta)
+            
             # print(abs)
-            abs = abs.masked_fill(abs < 1e-6, 1e-6)
 
             if self.training and self.take_new:
                 self.abs.data = abs.detach()
@@ -160,4 +178,6 @@ class LinQuantExpScale(Quant):
 
             self.delta.data = (
                 2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
+
+        # print((self.delta).shape)
         return LinQuant_.apply(x*fact, expQuant.apply(self.abs), self.delta)
