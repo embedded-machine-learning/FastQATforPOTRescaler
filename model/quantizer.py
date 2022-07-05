@@ -29,7 +29,7 @@ class LinQuant_(torch.autograd.Function):
         with torch.no_grad():
             self.save_for_backward(x, abs)
             x = x.clamp(-abs, abs)
-            x = x.div(delta).floor().mul(delta)
+            x = x.div(delta, rounding_mode="floor").mul(delta)
             if torch.any(torch.isnan(x)):
                 print("nan in Linquant forward")
             return x
