@@ -35,7 +35,7 @@ class Stopfn(torch.autograd.Function):
     def forward(self, val: Tensor, rexp: Tensor, training: bool):
         with torch.no_grad():
             if not training:
-                val = val.div(2**-rexp[None, :, None, None])
+                val = val.div(2**-rexp.view(-1)[None, :, None, None])
         return val
 
     @staticmethod

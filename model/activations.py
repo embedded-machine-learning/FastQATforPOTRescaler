@@ -21,9 +21,9 @@ class LeakReLU(torch.nn.LeakyReLU):
         x,rexp = input
         x = F.leaky_relu(x,negative_slope=self.negative_slope, inplace=self.inplace)
         if self.training:
-            x = x*(2**(-rexp))
+            x = x*(2**(-rexp.view(-1)[None,:,None,None]))
             x = Floor.apply(x)
-            x = x/(2**(-rexp))
+            x = x/(2**(-rexp.view(-1)[None,:,None,None]))
         else:
             x = Floor.apply(x)
         return x,rexp
