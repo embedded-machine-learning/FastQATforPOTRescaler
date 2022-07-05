@@ -21,6 +21,7 @@ class Startfn(torch.autograd.Function):
     def forward(self, x: Tensor, delta, rexp: Tensor, training: bool) -> Tensor:
         with torch.no_grad():
             x = x.div(delta, rounding_mode="floor")
+            x = x.clamp(-2**(-rexp-1),2**(-rexp-1)-1)
             if training:
                 x = x.div(2**(-rexp))
         return x
@@ -117,7 +118,7 @@ class Stop(nn.Module):
         return Stop_(self.exp)
 
     def forward(self, invals: Tuple[Tensor, Tensor]) -> Tensor:
-        self.exp.data = invals[1].detach()
+        self.exp = invals[1].detach().clone()
         x = Stopfn.apply(invals[0], invals[1], self.training)
         x = checkNan.apply(x)       # removes nan from backprop
         return x

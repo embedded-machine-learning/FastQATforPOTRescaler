@@ -186,7 +186,7 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
         self.func_t = calculate_t
         self.func_a = calculate_alpha
 
-        self.out_quant = LinQuantExpScale(
+        self.out_quant = LinQuant(
             outQuantBits, (1, num_features, 1, 1) if outQuantDyn else (-1,), 0.1, 0)
 
         self.register_buffer('in_quant',    torch.ones(num_features, 1, 1, 1))
@@ -220,38 +220,64 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
             self.in_quant = in_quant.detach()
         self.rexp = rexp.detach()
         xorig = x.detach().clone()
+        # if self.training:
         x = super().forward(x)
+        # else:
+        #     x = super().forward(x*self.in_quant.view(-1)[None,:,None,None])
         self.weight_sign = torch.sign(self.weight).detach()
         if self.training:
             x = self.out_quant(x)
             return BatchNorm2dBasefn.apply(self, xorig, x)
         else:
             with torch.no_grad():
-                self.n = self.func_n(weight=torch.abs(self.weight.view(-1)),
-                                     bias=self.bias.view(-1),
-                                     mean=self.running_mean.view(-1),
-                                     var=self.running_var.view(-1),
-                                     in_quant=self.in_quant.view(-1),
-                                     out_quant=self.out_quant.delta.view(-1),
-                                     rexp=rexp.view(-1)).detach()
-                self.t = self.func_t(weight=self.weight.view(-1),
-                                     bias=self.bias.view(-1),
-                                     mean=self.running_mean.view(-1),
-                                     var=self.running_var.view(-1),
-                                     in_quant=self.in_quant.view(-1),
-                                     out_quant=self.out_quant.delta.view(-1),
-                                     rexp=rexp.view(-1),
-                                     n=self.n.view(-1)).detach()
-                self.t = self.t.clamp_(-(2**(self.outQuantBits-1)),
-                                       2**(self.outQuantBits-1) - 1).detach()
+                # self.n = self.func_n(weight=torch.abs(self.weight.view(-1)),
+                #                      bias=self.bias.view(-1),
+                #                      mean=self.running_mean.view(-1),
+                #                      var=self.running_var.view(-1),
+                #                      in_quant=self.in_quant.view(-1),
+                #                      out_quant=self.out_quant.delta.view(-1),
+                #                      rexp=rexp.view(-1)).detach()
+                # self.t = self.func_t(weight=self.weight.view(-1),
+                #                      bias=self.bias.view(-1),
+                #                      mean=self.running_mean.view(-1),
+                #                      var=self.running_var.view(-1),
+                #                      in_quant=self.in_quant.view(-1),
+                #                      out_quant=self.out_quant.delta.view(-1),
+                #                      rexp=rexp.view(-1),
+                #                      n=self.n.view(-1)).detach()
+                # self.t = self.t.clamp_(-(2**(self.outQuantBits-1)),
+                #                        2**(self.outQuantBits-1) - 1).detach()
 
-                xorig = xorig.mul_(self.weight_sign[None, :, None, None]*torch.exp2(
-                    self.n)[None, :, None, None]).add_(self.t[None, :, None, None])
+                # xorig = xorig.mul_(self.weight_sign[None, :, None, None]*torch.exp2(
+                #     self.n)[None, :, None, None]).add_(self.t[None, :, None, None])
+                # xorig = xorig.floor_()
+                # # if torch.any(torch.abs(xorig)>2**(self.outQuantBits-1) ):
+                # #     print("had to clamp output")
+                # xorig = xorig.clamp_(-(2**(self.outQuantBits-1)),
+                #                      2**(self.outQuantBits-1) - 1)
+                # rexp = torch.log2(self.out_quant.delta)
+                self.n = self.func_n(weight=torch.abs(self.weight.view(-1)),
+                                    bias=self.bias.view(-1),
+                                    mean=self.running_mean.view(-1),
+                                    var=self.running_var.view(-1),
+                                    in_quant=self.in_quant.view(-1),
+                                    out_quant=self.out_quant.delta.view(-1),
+                                    rexp=self.rexp.view(-1)).detach()
+                self.t = self.func_t(weight=self.weight.view(-1),
+                                    bias=self.bias.view(-1),
+                                    mean=self.running_mean.view(-1),
+                                    var=self.running_var.view(-1),
+                                    in_quant=self.in_quant.view(-1),
+                                    out_quant=self.out_quant.delta.view(-1),
+                                    rexp=self.rexp.view(-1),
+                                    n=self.n.view(-1)).detach()
+                self.t = self.t.clamp_(-(2**(self.outQuantBits-1)),
+                                    2**(self.outQuantBits-1) - 1).detach()
+                tmp = torch.exp2(self.n)
+                xorig = xorig.mul_(tmp[None, :, None, None]).add_(self.t[None, :, None, None])
                 xorig = xorig.floor_()
-                # if torch.any(torch.abs(xorig)>2**(self.outQuantBits-1) ):
-                #     print("had to clamp output")
                 xorig = xorig.clamp_(-(2**(self.outQuantBits-1)),
-                                     2**(self.outQuantBits-1) - 1)
+                                    2**(self.outQuantBits-1) - 1)
                 rexp = torch.log2(self.out_quant.delta)
 
                 return xorig, rexp
