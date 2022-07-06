@@ -49,15 +49,12 @@ class AddQAT_(torch.autograd.Function):
     def forward(_,a,b,a_shift,b_shift,rexp,training):
         with torch.no_grad():
             if training:
-                va = (a*torch.exp2(-rexp).view(-1)[None,:,None,None]).clone()
-                vb = (b*torch.exp2(-rexp).view(-1)[None,:,None,None]).clone()
+                va = (a*torch.exp2(-rexp).view(-1)[None,:,None,None]).floor()
+                vb = (b*torch.exp2(-rexp).view(-1)[None,:,None,None]).floor()
             else:
-                va = a.clone()
-                vb = b.clone()
+                va = a.mul(torch.exp2(-a_shift).view(-1)[None,:,None,None]).floor()
+                vb = b.mul(torch.exp2(-b_shift).view(-1)[None,:,None,None]).floor()
             #explicit quant domaine
-            va = va.mul(torch.exp2(-a_shift).view(-1)[None,:,None,None]).floor()
-            vb = vb.mul(torch.exp2(-b_shift).view(-1)[None,:,None,None]).floor()
-
             va = va.add(vb)
 
             #done
@@ -83,8 +80,8 @@ class AddQAT(nn.Module):
         arexp = a[1]
         brexp = b[1]
         rexp = torch.max(arexp,brexp)
-        self.a_shift = (arexp-rexp).detach()
-        self.b_shift = (brexp-rexp).detach()
+        self.a_shift = -(arexp-rexp).detach()
+        self.b_shift = -(brexp-rexp).detach()
         out = AddQAT_.apply(a[0],b[0],self.a_shift,self.b_shift,rexp,self.training)
         # print("AddQAT")
         # print(out.shape,a[0].shape)
