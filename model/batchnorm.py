@@ -386,7 +386,9 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                                     2**(self.outQuantBits-1) - 1)
                 xorig = xorig.mul_(self.out_quant.delta)
                 rexp = torch.log2(self.out_quant.delta)
-            return xorig, rexp
+
+                x.data = xorig.detach()
+            return x, rexp
 
         else:
             with torch.no_grad():
