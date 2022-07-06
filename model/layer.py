@@ -154,9 +154,9 @@ class BlockQuantN(nn.Module):
     def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False, weight_quant_bits=8, weight_quant_channel_wise=True) -> None:
         super(BlockQuantN, self).__init__()
 
-        self.conv = Conv2dQuant(layers_in, layers_out, kernel_size, stride, padding=int(
+        self.conv = Conv2dQuant_new(layers_in, layers_out, kernel_size, stride, padding=int(
             np.floor(kernel_size/2)), groups=groups, weight_quant_bits=weight_quant_bits, weight_quant_channel_wise=weight_quant_channel_wise)
-        self.bn = BatchNorm2dBase(
+        self.bn = BatchNorm2dBase_new(
             layers_out, outQuantBits=outQuantBits, outQuantDyn=outQuantDyn)
         self.activation = LeakReLU(0.125)
 
