@@ -136,3 +136,33 @@ class Conv2dQuant_new(nn.Conv2d):
         if not self.training and (out-out.round()).abs().max()!=0:
             print("post convolution not whole number",(out-out.round()).mean())
         return out, orexp
+
+
+class bias_quant(torch.autograd.Function):
+    @staticmethod
+    def forward(_,x,rexp):
+        x = x.mul(2**(-rexp)).floor().div(2**(-rexp))
+        return x
+    def backward(_,grad):
+        return grad, None
+
+class Conv2dQuantFreeStanding_new(Conv2dQuant_new):
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: _size_2_t, stride: _size_2_t = 1, padding: Union[str, _size_2_t] = 0, dilation: _size_2_t = 1, groups: int = 1, bias: bool = True, padding_mode: str = 'zeros', device=None, dtype=None, weight_quant=None, weight_quant_bits=None, weight_quant_channel_wise=False, weight_quant_args=None, weight_quant_kargs={}) -> None:
+        super(Conv2dQuantFreeStanding_new,self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode, device, dtype, weight_quant, weight_quant_bits, weight_quant_channel_wise, weight_quant_args, weight_quant_kargs)
+        if self.bias!=None:
+            self.register_buffer('quant_bias', self.bias.clone())
+    def forward(self, invals: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        x = super().forward(invals)
+        rexp = x[1]+torch.log2(self.quantw.delta)
+        val = x[0]
+        if self.bias!=None:
+            bias = bias_quant.apply(self.bias,rexp)
+            if self.training:
+                val = val.add(bias[None,:,None,None])
+                # print("added bias")
+                pass
+            else:
+                with torch.no_grad():
+                    self.quant_bias = bias.mul(2**(-rexp)).detach()
+                    val = val.add(self.quant_bias[None,:,None,None])
+        return (val,rexp)
