@@ -332,14 +332,17 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
         self.init = True
 
     def get_weight_factor(self):
-        self.alpha = self.func_a(weight = self.weight.view(-1).detach().abs(),
-                                mean = self.running_mean.view(-1).detach(),
-                                var = self.running_var.view(-1).detach(),
-                                in_quant = self.in_quant.view(-1).detach(),
-                                out_quant = self.out_quant.delta.view(-1).detach(),
-                                rexp = self.rexp.view(-1).detach())
-        # print(f"alpha: {self.alpha.view(-1)}")                         
-        return self.alpha[:, None, None, None]
+        def ret_fun(in_quant):
+            self.in_quant = in_quant.detach()
+            self.alpha = self.func_a(weight = self.weight.view(-1).detach(),
+                                    mean = self.running_mean.view(-1).detach(),
+                                    var = self.running_var.view(-1).detach(),
+                                    in_quant = self.in_quant.view(-1).detach(),
+                                    out_quant = self.out_quant.delta.view(-1).detach(),
+                                    rexp = self.rexp.view(-1).detach())
+            # print(f"alpha: {self.alpha.view(-1)}")                         
+            return self.alpha[:, None, None, None]
+        return ret_fun
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor], in_quant=None) -> Tuple[torch.Tensor, torch.Tensor]:
         x, rexp = input

@@ -24,7 +24,7 @@ class ConvQAT(nn.Module):
         self.act = LeakReLU(0.125) if act else nn.Sequential()
 
     def forward(self, x):
-        fact = self.bn.get_weight_factor().detach()
+        fact = self.bn.get_weight_factor()
         # print("ConvQAT")
         # print(x[0].shape)
         x = self.conv(x, fact)

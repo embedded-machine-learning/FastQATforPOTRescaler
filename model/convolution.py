@@ -98,7 +98,7 @@ class Conv2dQuant_new(nn.Conv2d):
             quant_qrgs = weight_quant_args
 
         if weight_quant == None:
-            self.quantw = LinQuant(*quant_qrgs, **weight_quant_kargs)
+            self.quantw = LinQuantWeight(*quant_qrgs, **weight_quant_kargs)
         else:
             self.quantw = weight_quant
 
@@ -107,7 +107,7 @@ class Conv2dQuant_new(nn.Conv2d):
     def convert(self):
         return Conv2d_(self.used_weights, self.in_channels, self.out_channels, self.kernel_size, self.stride, self.padding, self.dilation, self.groups, self.bias, self.padding_mode, None, None)
 
-    def forward(self, invals: Tuple[torch.Tensor, torch.Tensor], factor=1) -> torch.Tensor:
+    def forward(self, invals: Tuple[torch.Tensor, torch.Tensor], factor_fun=None) -> torch.Tensor:
         input, rexp = invals
 
         tmp = self.weight.clone()
@@ -116,10 +116,10 @@ class Conv2dQuant_new(nn.Conv2d):
         rexp_diff = rexp.squeeze() - orexp.unsqueeze(-1)
         tmp = tmp*(2**rexp_diff)[None, :, None, None]
 
-        tmp = self.quantw(tmp, factor)/factor
+        tmp,fact = self.quantw(tmp, factor_fun)
 
         if not self.training:
-            tmp = torch.round(tmp/self.quantw.delta*factor)
+            tmp = torch.round(tmp/self.quantw.delta*fact)
             # only nessesary as /delta can have a slight relative error ~1e-6 in calculations
             self.quant_weight = tmp.detach()
         else:
@@ -127,7 +127,7 @@ class Conv2dQuant_new(nn.Conv2d):
 
         if torch.any(torch.isnan(tmp)):
             print(torch.max(torch.abs(self.weight.view(-1))))
-            print(factor)
+            print(fact)
 
 
         out = self._conv_forward(input, tmp, None)
