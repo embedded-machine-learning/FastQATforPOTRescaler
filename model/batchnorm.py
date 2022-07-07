@@ -332,12 +332,12 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
         self.init = True
 
     def get_weight_factor(self):
-        self.alpha = self.func_a(weight = self.weight.view(-1).detach(),
-                                 mean = self.running_mean.view(-1).detach(),
-                                 var = self.running_var.view(-1).detach(),
-                                 in_quant = self.in_quant.view(-1).detach(),
-                                 out_quant = self.out_quant.delta.view(-1).detach(),
-                                 rexp = self.rexp.view(-1).detach())
+        self.alpha = self.func_a(weight = self.weight.view(-1).detach().abs(),
+                                mean = self.running_mean.view(-1).detach(),
+                                var = self.running_var.view(-1).detach(),
+                                in_quant = self.in_quant.view(-1).detach(),
+                                out_quant = self.out_quant.delta.view(-1).detach(),
+                                rexp = self.rexp.view(-1).detach())
         # print(f"alpha: {self.alpha.view(-1)}")                         
         return self.alpha[:, None, None, None]
 
@@ -380,7 +380,7 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                 # self.t = self.t.clamp(-(2**(self.outQuantBits-1)),
                 #                     2**(self.outQuantBits-1) - 1).detach()
                 tmp = torch.exp2(self.n-self.rexp.view(-1))/self.in_quant.view(-1)
-                xorig = xorig.mul_(tmp[None, :, None, None]).add_(self.t[None, :, None, None])
+                xorig = xorig.mul_(self.weight_sign[None, :, None, None]*tmp[None, :, None, None]).add_(self.t[None, :, None, None])
                 xorig = xorig.floor_()
                 xorig = xorig.clamp_(-(2**(self.outQuantBits-1)),
                                     2**(self.outQuantBits-1) - 1)
@@ -419,7 +419,7 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                 # self.t = self.t.clamp_(-(2**(self.outQuantBits-1)),
                 #                     2**(self.outQuantBits-1) - 1).detach()
                 tmp = torch.exp2(self.n)
-                xorig = xorig.mul_(tmp[None, :, None, None]).add_(self.t[None, :, None, None])
+                xorig = xorig.mul_(self.weight_sign[None, :, None, None]*tmp[None, :, None, None]).add_(self.t[None, :, None, None])
                 xorig = xorig.floor_()
                 xorig = xorig.clamp_(-(2**(self.outQuantBits-1)),
                                     2**(self.outQuantBits-1) - 1)

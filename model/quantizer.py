@@ -33,15 +33,16 @@ class LinQuant_(torch.autograd.Function):
             if torch.any(torch.isnan(x)):
                 print("nan in Linquant forward")
             return x
-
+        
     @staticmethod
     def backward(self, grad_output: torch.Tensor):
         with torch.no_grad():
+            val = 1
             x, abs = self.saved_tensors
             grad_output = grad_output.masked_fill(torch.logical_and(
-                torch.gt(x, 2*abs), torch.gt(grad_output, 0)), 0)
+                torch.gt(x, val*abs), torch.gt(grad_output, 0)), 0)
             grad_output = grad_output.masked_fill(torch.logical_and(
-                torch.le(x, -2*abs), torch.le(grad_output, 0)), 0)
+                torch.le(x, -val*abs), torch.le(grad_output, 0)), 0)
             if torch.any(torch.isnan(grad_output)):
                 print("nan in Linquant back")
             return grad_output.detach(), None, None
