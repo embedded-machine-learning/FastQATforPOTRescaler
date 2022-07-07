@@ -126,10 +126,10 @@ class Conv2dQuant_new(nn.Conv2d):
         orexp = (torch.mean(rexp)).squeeze()
         rexp_diff = rexp.squeeze() - orexp.unsqueeze(-1)
 
-        tmp_float,fact_int = LinQuantWeight_new.apply(self.weight,factor_fun,rexp_diff,self.quantw)
+        tmp_float,fact_int = LinQuantWeight_new.apply(self.weight,factor_fun,rexp_diff,self.quantw.forward)
         
         if not self.training:
-            tmp = torch.round(fact_int)
+            tmp = torch.round(fact_int/self.quantw.delta)
             tmp = checkNan.apply( tmp, "conv tmp 2")
             # only nessesary as /delta can have a slight relative error ~1e-6 in calculations
             self.quant_weight = tmp.detach()
