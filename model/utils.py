@@ -34,10 +34,10 @@ import numpy as np
 
 class checkNan(torch.autograd.Function):
     @staticmethod
-    def forward(self, in1):
+    def forward(self, in1,place=None):
         with torch.no_grad():
             if in1.isnan().any():
-                print("check nan forward nan")
+                print("check nan forward nan",place)
         return in1
 
     @staticmethod
@@ -49,4 +49,4 @@ class checkNan(torch.autograd.Function):
                 # npdata = out.view(-1).cpu().detach().numpy()
                 # np.savetxt("checkNanvalue.txt",npdata)
             out = out.masked_fill_(torch.isnan(out),0)
-        return out.detach()
+        return out, None
