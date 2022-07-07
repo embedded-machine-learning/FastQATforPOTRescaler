@@ -19,8 +19,8 @@ class ConvQAT(nn.Module):
     # Standard convolution
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True):  # ch_in, ch_out, kernel, stride, padding, groups
         super().__init__()
-        self.conv = Conv2dQuant_new(c1, c2, k, s, autopad(k, p), groups=g, bias=False,weight_quant_bits=32,weight_quant_channel_wise=True)
-        self.bn = BatchNorm2dBase_new(c2,outQuantDyn=True,outQuantBits=32)
+        self.conv = Conv2dQuant_new(c1, c2, k, s, autopad(k, p), groups=g, bias=False,weight_quant_bits=8,weight_quant_channel_wise=True)
+        self.bn = BatchNorm2dBase_new(c2,outQuantDyn=True,outQuantBits=8)
         self.act = LeakReLU(0.125) if act else nn.Sequential()
 
     def forward(self, x):

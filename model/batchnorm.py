@@ -383,7 +383,7 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                 # self.t = self.t.clamp(-(2**(self.outQuantBits-1)),
                 #                     2**(self.outQuantBits-1) - 1).detach()
                 tmp = torch.exp2(self.n-self.rexp.view(-1))/self.in_quant.view(-1)
-                xorig = xorig.mul_(tmp[None, :, None, None]).add_(self.t[None, :, None, None])
+                xorig = xorig.mul_(self.weight_sign[None, :, None, None]*tmp[None, :, None, None]).add_(self.t[None, :, None, None])
                 xorig = xorig.floor_()
                 xorig = xorig.clamp_(-(2**(self.outQuantBits-1)),
                                     2**(self.outQuantBits-1) - 1)
@@ -422,7 +422,7 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                 # self.t = self.t.clamp_(-(2**(self.outQuantBits-1)),
                 #                     2**(self.outQuantBits-1) - 1).detach()
                 tmp = torch.exp2(self.n)
-                xorig = xorig.mul_(tmp[None, :, None, None]).add_(self.t[None, :, None, None])
+                xorig = xorig.mul_(self.weight_sign[None, :, None, None]*tmp[None, :, None, None]).add_(self.t[None, :, None, None])
                 xorig = xorig.floor_()
                 xorig = xorig.clamp_(-(2**(self.outQuantBits-1)),
                                     2**(self.outQuantBits-1) - 1)

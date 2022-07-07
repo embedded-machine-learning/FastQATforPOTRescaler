@@ -92,7 +92,7 @@ class Conv2dQuant_new(nn.Conv2d):
         if weight_quant_args == None:
             quant_qrgs = (8 if weight_quant_bits == None else weight_quant_bits,
                           (-1,) if not weight_quant_channel_wise else (out_channels, 1, 1, 1),
-                          0.1
+                          1
                           )
         else:
             quant_qrgs = weight_quant_args
@@ -131,10 +131,10 @@ class Conv2dQuant_new(nn.Conv2d):
 
 
         out = self._conv_forward(input, tmp, None)
-        if torch.any(torch.isnan(out-out.round())):
-            print("WTF")
-        if not self.training and (out-out.round()).abs().max()!=0:
-            print("post convolution not whole number",(out-out.round()).mean())
+        # if torch.any(torch.isnan(out-out.round())):
+        #     print("WTF")
+        # if not self.training and (out-out.round()).abs().max()!=0:
+        #     print("post convolution not whole number",(out-out.round()).mean())
         return out, orexp
 
 
