@@ -78,8 +78,8 @@ def get_abs(self,x:torch.Tensor)->torch.Tensor:
     if self.simple:
         abs = x.abs().max()
     else:
-        xreorderd = x.permute(self.permutelist)
-        xreorderd = xreorderd.reshape((*xreorderd.shape[:self.numberofdims],-1))
+        xreorderd = x.permute(self.permutelist).contiguous()
+        xreorderd = xreorderd.view((*xreorderd.shape[:self.numberofdims],-1))
         abs = xreorderd.abs().max(dim=(self.numberofdims), keepdim=True).values.view(self.size)
     return abs
 
