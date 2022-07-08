@@ -196,7 +196,10 @@ class Conv2dQuant_new(nn.Conv2d):
             print(torch.max(torch.abs(self.weight.view(-1))))
 
         input = checkNan.apply( input, "conv input")
-        out = self._conv_forward(input, tmp, None)
+        if self.training:
+            out = self._conv_forward(input, tmp, None)
+        else:
+            out = self._conv_forward(input.type(torch.float32), tmp.type(torch.float32), None).type(torch.int32)
         # if torch.any(torch.isnan(out-out.round())):
         #     print("WTF")
         # if not self.training and (out-out.round()).abs().max()!=0:
