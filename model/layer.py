@@ -24,6 +24,8 @@ class Startfn(torch.autograd.Function):
             x = x.clamp(-2**(-rexp-1),2**(-rexp-1)-1)
             if training:
                 x = x.div(2**(-rexp))
+            else :
+                x = x.type(torch.int32)
         return x
 
     @staticmethod
@@ -36,7 +38,7 @@ class Stopfn(torch.autograd.Function):
     def forward(self, val: Tensor, rexp: Tensor, training: bool):
         with torch.no_grad():
             if not training:
-                val = val.div(2**(-rexp.view(-1)[None, :, None, None]))
+                val = val.type(torch.float).div(2**(-rexp.view(-1)[None, :, None, None]))
         return val
 
     @staticmethod

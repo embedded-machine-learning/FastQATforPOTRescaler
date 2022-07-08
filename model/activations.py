@@ -19,13 +19,14 @@ class LeakReLU(torch.nn.LeakyReLU):
         super().__init__(negative_slope, inplace)
     def forward(self,input: Tuple[torch.Tensor,torch.Tensor]):
         x,rexp = input
-        x = F.leaky_relu(x,negative_slope=self.negative_slope, inplace=self.inplace)
         if self.training:
+            x = F.leaky_relu(x,negative_slope=self.negative_slope, inplace=self.inplace)
             x = x*(2**(-rexp.view(-1)[None,:,None,None]))
             x = Floor.apply(x)
             x = x/(2**(-rexp.view(-1)[None,:,None,None]))
         else:
-            x = Floor.apply(x)
+            x = F.leaky_relu(x.type(torch.float32),negative_slope=self.negative_slope, inplace=self.inplace)
+            x = Floor.apply(x).type(torch.int32)
         return x,rexp
 
     def convert(self):

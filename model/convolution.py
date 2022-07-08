@@ -187,7 +187,8 @@ class Conv2dQuant_new(nn.Conv2d):
         if not self.training:
             # fact = 1
             tmp = torch.round(tmp*fact*(2**rexp_diff)[None, :, None, None]/self.quantw.delta)
-            tmp = checkNan.apply( tmp, "conv tmp 2")
+            tmp = checkNan.apply( tmp, "conv tmp 2").type(torch.int32)
+            # print(tmp)
             # only nessesary as /delta can have a slight relative error ~1e-6 in calculations
             self.quant_weight = tmp.detach()
 

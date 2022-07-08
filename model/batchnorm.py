@@ -353,7 +353,10 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
         xorig = x.detach().clone()
         # if self.training:
         checkNan.apply(xorig,"BN post clone")
-        x = super().forward(x)
+        if x.dtype == torch.int32:
+            x = super().forward(x.type(torch.float32))
+        else:
+            x = super().forward(x)
         checkNan.apply(xorig,"BN post true bn")
         # else:
         #     x = super().forward(x*self.in_quant.view(-1)[None,:,None,None])
@@ -449,7 +452,7 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                 xorig = xorig.mul(tmp[None, :, None, None])
                 xorig = checkNan.apply(xorig,"BN post mul")
                 # xorig = xorig.mul_(tmp[None, :, None, None]).add(self.t[None, :, None, None])
-                xorig = xorig.floor()
+                xorig = xorig.floor().type(torch.int32)
                 xorig = checkNan.apply(xorig,"BN post floor")
                 xorig = xorig.clamp(-(2**(self.outQuantBits-1)),
                                     2**(self.outQuantBits-1) - 1)
