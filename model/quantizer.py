@@ -87,6 +87,43 @@ def get_abs(self,x:torch.Tensor)->torch.Tensor:
 #################################################
 #           MODULES                             #
 #################################################
+class Filter(nn.Module):
+    def __init__(self) -> None:
+        super(Filter,self).__init__()
+        self.past=[]
+        self.epoch_length=-1
+        self.last_training=False
+        self.i=0
+
+    def forward(self,x:torch.Tensor):
+        with torch.no_grad():
+            if self.training:
+                if not self.last_training:
+                    self.last_training=True
+                    self.i=0
+                
+                if self.epoch_length==-1:
+                    self.past.append(x.view(-1).detach().clone())
+                else:
+                    if self.i >= self.epoch_length:
+                        print("incorrect epoch length")
+                        self.past.append(x.view(-1).detach().clone())
+                        self.epoch_length=-1
+                    else:
+                        self.past[self.i]=x.view(-1).detach().clone()
+                # if (self.epoch_length==-1 and self.i==0) or self.epoch_length==1:
+                #     out = self.past[0]
+                # else:
+                out = torch.max(torch.stack(self.past,dim=1),dim=1).values
+                self.i += 1
+            else:
+                if self.last_training:
+                    self.last_training=False
+                    if self.epoch_length==-1:
+                        self.epoch_length=self.i
+                        print("fixated length ")
+                out = torch.max(torch.stack(self.past,dim=1),dim=1).values
+            return out.view(x.shape)
 
 class Quant(nn.Module):
     def __init__(self, size) -> None:
@@ -127,6 +164,8 @@ class LinQuant(Quant):
         self.mom1 = mom1
         self.mom2 = mom2
 
+        self.filter = Filter()
+
     def forward(self, x:torch.Tensor, fact=1):
         with torch.no_grad():
             abs = get_abs(self,x)
@@ -135,14 +174,15 @@ class LinQuant(Quant):
                 self.delta = (2*(self.abs/(2.0**self.bits-1.0))).detach()
                 return LinQuant_.apply(x*fact, self.abs, self.delta)
 
-            if self.training and self.take_new:
-                self.abs = abs.detach()
-                self.take_new = False
-                # print("new taken")
-            elif self.training:
-                # print(f" abs diff:  {(abs.view(-1)-self.abs.view(-1)).abs().max()}")
-                self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs + self.mom2 *
-                            (self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
+            # if self.training and self.take_new:
+            #     self.abs = abs.detach()
+            #     self.take_new = False
+            #     # print("new taken")
+            # elif self.training:
+            #     # print(f" abs diff:  {(abs.view(-1)-self.abs.view(-1)).abs().max()}")
+            #     self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs + self.mom2 *
+            #                 (self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
+            self.abs = self.filter(abs)
             # print(f" old delta: {self.delta.view(-1)}")
             self.delta = (2*(self.abs/(2.0**self.bits-1.0))).detach()
             # print(f" new delta: {self.delta.view(-1)}")

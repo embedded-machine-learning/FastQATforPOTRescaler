@@ -358,8 +358,8 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
         # else:
         #     x = super().forward(x*self.in_quant.view(-1)[None,:,None,None])
         self.weight_sign = torch.sign(self.weight).detach()
+        x = self.out_quant(x)
         if self.training:
-            x = self.out_quant(x)
             with torch.no_grad():
                 mean = xorig.mean([0, 2, 3])
                 var = xorig.var([0, 2, 3], unbiased=False)
