@@ -93,11 +93,22 @@ class Filter(nn.Module):
         self.past=[]
         self.epoch_length=-1
         self.last_training=False
-        self.i=0
+        self.i=0 
+        self.last_dtype = None
+        self.dev = None
 
     def forward(self,x:torch.Tensor):
+        # return x
         with torch.no_grad():
             if self.training:
+                if self.last_dtype!=x.dtype or x.device!=self.dev:
+                    print("Reseting Filter")
+                    self.last_dtype = x.dtype
+                    self.past=[]
+                    self.epoch_length=-1
+                    self.i=0
+                    self.dev=x.device
+
                 if not self.last_training:
                     self.last_training=True
                     self.i=0
@@ -109,12 +120,16 @@ class Filter(nn.Module):
                         print("incorrect epoch length")
                         self.past.append(x.view(-1).detach().clone())
                         self.epoch_length=-1
-                    else:
+                    else: 
                         self.past[self.i]=x.view(-1).detach().clone()
+                        pass
                 # if (self.epoch_length==-1 and self.i==0) or self.epoch_length==1:
                 #     out = self.past[0]
                 # else:
-                out = torch.max(torch.stack(self.past,dim=1),dim=1).values
+                out = torch.max(torch.stack(self.past,dim=1),dim=1,keepdim=True).values
+                # print(out.shape)
+                # print(x.shape)
+                x.data = out.detach().clone().view(x.shape).to(x.device).type(x.dtype)
                 self.i += 1
             else:
                 if self.last_training:
@@ -123,7 +138,8 @@ class Filter(nn.Module):
                         self.epoch_length=self.i
                         print("fixated length ")
                 out = torch.max(torch.stack(self.past,dim=1),dim=1).values
-            return out.view(x.shape)
+                x.data = out.detach().clone().view(x.shape).to(x.device).type(x.dtype)
+            return x
 
 class Quant(nn.Module):
     def __init__(self, size) -> None:
@@ -182,7 +198,7 @@ class LinQuant(Quant):
             #     # print(f" abs diff:  {(abs.view(-1)-self.abs.view(-1)).abs().max()}")
             #     self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs + self.mom2 *
             #                 (self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
-            self.abs = self.filter(abs)
+            self.abs = self.filter(abs).detach().clone()
             # print(f" old delta: {self.delta.view(-1)}")
             self.delta = (2*(self.abs/(2.0**self.bits-1.0))).detach()
             # print(f" new delta: {self.delta.view(-1)}")

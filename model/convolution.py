@@ -122,17 +122,18 @@ class LinQuantWeight(Quant):
             abs = get_abs(self,x*(2**rexp_diff)[None, :, None, None])
             if torch.any(abs < 1e-6):
                 print("weights to small to quantize")
-                self.delta = (2*(self.abs/(2.0**self.bits-1.0))).detach()
-                return LinQuant_.apply(x*fact, self.abs, self.delta)
+                self.delta = (2*(self.abs.type(abs.dtype)/(2.0**self.bits.type(abs.dtype)-1.0))).detach().type(abs.dtype)
+                if fact_fun!=None:
+                    fact = fact_fun(self.delta)
+                else:
+                    fact = 1
+                if torch.any(torch.isnan(self.delta)):
+                    print("nan in weights")
+                # print((self.delta).shape)
+                return LinQuant_new_.apply(x, self.abs, self.delta,rexp_diff,fact),fact
 
-            if self.training and self.take_new:
-                self.abs = abs.detach()
-                self.take_new = False
-                # print("new taken")
-            elif self.training:
-                # print(f" abs diff:  {(abs.view(-1)-self.abs.view(-1)).abs().max()}")
-                self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs + self.mom2 *
-                            (self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
+               
+            self.abs = abs.detach()
             # print(f" old delta: {self.delta.view(-1)}")
             self.delta = (2*(self.abs/(2.0**self.bits-1.0))).detach()
             # print(f" new delta: {self.delta.view(-1)}")
