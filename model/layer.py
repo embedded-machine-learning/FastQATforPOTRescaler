@@ -36,7 +36,7 @@ class Stopfn(torch.autograd.Function):
     def forward(self, val: Tensor, rexp: Tensor, training: bool):
         with torch.no_grad():
             if not training:
-                val = val.div(2**-rexp.view(-1)[None, :, None, None])
+                val = val.div(2**(-rexp.view(-1)[None, :, None, None]))
         return val
 
     @staticmethod
@@ -85,7 +85,7 @@ class Stop_(nn.Module):
 
     def forward(self, x: torch.Tensor):
         x = x/(2**-self.rexp[None, :, None, None])
-        x = checkNan.apply(x)       # removes nan from backprop
+        x = checkNan.apply(x,"Stop_")       # removes nan from backprop
         return x
 
 #########################################################################################
@@ -120,7 +120,7 @@ class Stop(nn.Module):
     def forward(self, invals: Tuple[Tensor, Tensor]) -> Tensor:
         self.exp = invals[1].detach().clone()
         x = Stopfn.apply(invals[0], invals[1], self.training)
-        x = checkNan.apply(x)       # removes nan from backprop
+        x = checkNan.apply(x,"Stop")       # removes nan from backprop
         return x
 
 
@@ -151,7 +151,7 @@ class Bias(nn.Module):
 
 
 class BlockQuantN(nn.Module):
-    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False, weight_quant_bits=8, weight_quant_channel_wise=True) -> None:
+    def __init__(self, layers_in, layers_out, kernel_size, stride=1, groups=1, outQuantBits=8, outQuantDyn=False, weight_quant_bits=8, weight_quant_channel_wise=True) -> None:
         super(BlockQuantN, self).__init__()
 
         self.conv = Conv2dQuant_new(layers_in, layers_out, kernel_size, stride, padding=int(
@@ -175,7 +175,7 @@ class BlockQuantN(nn.Module):
 
 
 class BlockQuantNwoA(BlockQuantN):
-    def __init__(self, layers_in, layers_out, kernel_size, stride, groups=1, outQuantBits=8, outQuantDyn=False, weight_quant_bits=8, weight_quant_channel_wise=True) -> None:
+    def __init__(self, layers_in, layers_out, kernel_size, stride=1, groups=1, outQuantBits=8, outQuantDyn=False, weight_quant_bits=8, weight_quant_channel_wise=True) -> None:
         super(BlockQuantNwoA, self).__init__(layers_in, layers_out, kernel_size, stride,
                                              groups, outQuantBits, outQuantDyn, weight_quant_bits, weight_quant_channel_wise)
         self.activation = nn.Sequential()

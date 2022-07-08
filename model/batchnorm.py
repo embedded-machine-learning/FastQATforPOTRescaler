@@ -346,12 +346,15 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor], in_quant=None) -> Tuple[torch.Tensor, torch.Tensor]:
         x, rexp = input
+        x = checkNan.apply(x,"BN in")
         if in_quant is not None:
             self.in_quant = in_quant.detach()
         self.rexp = rexp.detach()
         xorig = x.detach().clone()
         # if self.training:
+        checkNan.apply(xorig,"BN post clone")
         x = super().forward(x)
+        checkNan.apply(xorig,"BN post true bn")
         # else:
         #     x = super().forward(x*self.in_quant.view(-1)[None,:,None,None])
         self.weight_sign = torch.sign(self.weight).detach()
@@ -418,20 +421,39 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                 
                 # print(f"n : {self.n.view(-1)}")
                 self.n = torch.ceil(self.n)
+                tmp = self.weight_sign*torch.exp2(self.n)
+                self.t = self.t.div(tmp).round()
+
                 if torch.any(self.n>0):
                     print("BN to big n high inaccuracy", self.n.view(-1))
+                self.n = checkNan.apply(self.n,"BN self.n")
+                self.t = checkNan.apply(self.t,"BN self.t")
+                tmp = checkNan.apply(tmp,"BN tmp")
                 # print(f"n : {self.n.view(-1)}")
-
                 # # self.n = torch.ceil(self.n)
                 # self.t = self.t.clamp_(-(2**(self.outQuantBits-1)),
                 #                     2**(self.outQuantBits-1) - 1).detach()
-                tmp = self.weight_sign*torch.exp2(self.n)
-                self.t = self.t.div(tmp).round()
-                xorig = xorig.add(self.t[None, :, None, None]).mul(tmp[None, :, None, None])
+                xorig = checkNan.apply(xorig,"BN pre add")
+                xorig_ = xorig.detach().clone()
+                xorig = xorig + self.t[None, :, None, None]
+                if torch.any(torch.isnan(xorig)):
+                    pos=torch.isnan(xorig).nonzero()
+                    print(pos.shape)
+                    print(xorig_[pos[0,0],
+                                 pos[0,1],
+                                 pos[0,2],
+                                 pos[0,3]])
+                    pass
+                xorig = checkNan.apply(xorig,"BN post add")
+                xorig = torch.nan_to_num(xorig)
+                xorig = xorig.mul(tmp[None, :, None, None])
+                xorig = checkNan.apply(xorig,"BN post mul")
                 # xorig = xorig.mul_(tmp[None, :, None, None]).add(self.t[None, :, None, None])
                 xorig = xorig.floor()
+                xorig = checkNan.apply(xorig,"BN post floor")
                 xorig = xorig.clamp(-(2**(self.outQuantBits-1)),
                                     2**(self.outQuantBits-1) - 1)
+                xorig = checkNan.apply(xorig,"BN post clamp")
                 rexp = torch.log2(self.out_quant.delta)
-
+                xorig = checkNan.apply(xorig,"BN out")
                 return xorig, rexp
