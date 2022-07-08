@@ -293,7 +293,7 @@ def calculate_t_new(weight: torch.Tensor,
                 rexp: torch.Tensor,
                 n: torch.Tensor) -> torch.Tensor:
     with torch.no_grad():
-        t = torch.round(-mean*(weight/(out_quant*torch.sqrt(var+1e-5))) + bias/out_quant)
+        t = (-mean*(weight/(out_quant*torch.sqrt(var+1e-5))) + bias/out_quant)
         return t
 
 def calculate_alpha_new(weight: torch.Tensor,
@@ -378,16 +378,18 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                                     rexp=self.rexp.view(-1),
                                     n=self.n.view(-1)).detach()
 
-                
+                if torch.any(self.n>0):
+                    print("BN to big n high inaccuracy", self.n.view(-1))
 
                 # self.t = self.t.clamp(-(2**(self.outQuantBits-1)),
                 #                     2**(self.outQuantBits-1) - 1).detach()
-                tmp = torch.exp2(self.n-self.rexp.view(-1))/self.in_quant.view(-1)
-                xorig = xorig.mul_(self.weight_sign[None, :, None, None]*tmp[None, :, None, None]).add_(self.t[None, :, None, None])
-                xorig = xorig.floor_()
-                xorig = xorig.clamp_(-(2**(self.outQuantBits-1)),
+                tmp = self.weight_sign*torch.exp2(self.n-self.rexp.view(-1))/self.in_quant.view(-1)
+                self.t = self.t.div(tmp)
+                xorig = xorig.add(self.t[None, :, None, None]).mul(tmp[None, :, None, None])
+                xorig = xorig.floor()
+                xorig = xorig.clamp(-(2**(self.outQuantBits-1)),
                                     2**(self.outQuantBits-1) - 1)
-                xorig = xorig.mul_(self.out_quant.delta)
+                xorig = xorig.mul(self.out_quant.delta)
                 rexp = torch.log2(self.out_quant.delta)
 
                 x.data = xorig.detach()
@@ -416,15 +418,19 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                 
                 # print(f"n : {self.n.view(-1)}")
                 self.n = torch.ceil(self.n)
+                if torch.any(self.n>0):
+                    print("BN to big n high inaccuracy", self.n.view(-1))
                 # print(f"n : {self.n.view(-1)}")
 
                 # # self.n = torch.ceil(self.n)
                 # self.t = self.t.clamp_(-(2**(self.outQuantBits-1)),
                 #                     2**(self.outQuantBits-1) - 1).detach()
-                tmp = torch.exp2(self.n)
-                xorig = xorig.mul_(self.weight_sign[None, :, None, None]*tmp[None, :, None, None]).add_(self.t[None, :, None, None])
-                xorig = xorig.floor_()
-                xorig = xorig.clamp_(-(2**(self.outQuantBits-1)),
+                tmp = self.weight_sign*torch.exp2(self.n)
+                self.t = self.t.div(tmp).round()
+                xorig = xorig.add(self.t[None, :, None, None]).mul(tmp[None, :, None, None])
+                # xorig = xorig.mul_(tmp[None, :, None, None]).add(self.t[None, :, None, None])
+                xorig = xorig.floor()
+                xorig = xorig.clamp(-(2**(self.outQuantBits-1)),
                                     2**(self.outQuantBits-1) - 1)
                 rexp = torch.log2(self.out_quant.delta)
 
