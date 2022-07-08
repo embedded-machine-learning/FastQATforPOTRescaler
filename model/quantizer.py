@@ -37,7 +37,7 @@ class LinQuant_(torch.autograd.Function):
     @staticmethod
     def backward(self, grad_output: torch.Tensor):
         with torch.no_grad():
-            val = 1
+            val = 2
             x, abs = self.saved_tensors
             grad_output = grad_output.masked_fill(torch.logical_and(
                 torch.gt(x, val*abs), torch.gt(grad_output, 0)), 0)
@@ -161,7 +161,7 @@ class LinQuantExpScale(Quant):
         self.mom1 = mom1
         self.mom2 = mom2
 
-    def forward(self, x, fact=1):
+    def forward(self, x):
         with torch.no_grad():
             abs = get_abs(self,x)
             if torch.any(abs < 1e-6):
@@ -183,4 +183,4 @@ class LinQuantExpScale(Quant):
                 2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
 
         # print((self.delta).shape)
-        return LinQuant_.apply(x*fact, expQuant.apply(self.abs), self.delta)
+        return LinQuant_.apply(x, expQuant.apply(self.abs), self.delta)
