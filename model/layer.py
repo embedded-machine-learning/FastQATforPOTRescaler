@@ -35,15 +35,15 @@ class Startfn(torch.autograd.Function):
 
 class Stopfn(torch.autograd.Function):
     @staticmethod
-    def forward(self, val: Tensor, rexp: Tensor, training: bool):
+    def forward(self, val: Tensor, rexp: Tensor, training: bool,dtype):
         with torch.no_grad():
             if not training:
-                val = val.type(torch.float).div(2**(-rexp.view(-1)[None, :, None, None]))
+                val = val.type(dtype).div(2**(-rexp.view(-1)[None, :, None, None]))
         return val
 
     @staticmethod
     def backward(self, x: Tensor):
-        return x.detach(), None, None
+        return x.detach(), None, None, None
 
 #########################################################################################
 #                                   CONVERSIONS                                         #
@@ -115,13 +115,15 @@ class Stop(nn.Module):
         super(Stop, self).__init__()
         self.size = []
         self.register_buffer('exp', torch.zeros(1))
+        self.register_buffer('for_dtype', torch.zeros(1))
+
 
     def convert(self):
         return Stop_(self.exp)
 
     def forward(self, invals: Tuple[Tensor, Tensor]) -> Tensor:
         self.exp = invals[1].detach().clone()
-        x = Stopfn.apply(invals[0], invals[1], self.training)
+        x = Stopfn.apply(invals[0], invals[1], self.training, self.for_dtype.dtype)
         x = checkNan.apply(x,"Stop")       # removes nan from backprop
         return x
 
@@ -197,7 +199,13 @@ class MaxPool(nn.MaxPool2d):
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor]):
         val, rexp = input
-        return (F.max_pool2d(val, self.kernel_size, self.stride,
-                             self.padding, self.dilation, self.ceil_mode,
-                             self.return_indices),
-                rexp)
+        if self.training:
+            return (F.max_pool2d(val, self.kernel_size, self.stride,
+                                self.padding, self.dilation, self.ceil_mode,
+                                self.return_indices),
+                    rexp)
+        else:
+            return (F.max_pool2d(val.type(torch.float32), self.kernel_size, self.stride,
+                            self.padding, self.dilation, self.ceil_mode,
+                            self.return_indices).type(torch.int32),rexp)
+        

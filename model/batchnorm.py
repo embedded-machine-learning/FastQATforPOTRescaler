@@ -322,7 +322,7 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
         self.func_t = calculate_t_new
         self.func_a = calculate_alpha_new
 
-        self.out_quant = LinQuant(
+        self.out_quant = LinQuantExpScale(
             outQuantBits, (1, num_features, 1, 1) if outQuantDyn else (-1,), 0.1, 0)
 
         self.register_buffer('in_quant',    torch.ones(num_features, 1, 1, 1))
@@ -354,7 +354,7 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
         # if self.training:
         checkNan.apply(xorig,"BN post clone")
         if x.dtype == torch.int32:
-            x = super().forward(x.type(torch.float32))
+            x = super().forward(x.type(self.weight.dtype))
         else:
             x = super().forward(x)
         checkNan.apply(xorig,"BN post true bn")
@@ -424,7 +424,7 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                 
                 # print(f"n : {self.n.view(-1)}")
                 self.n = torch.ceil(self.n)
-                tmp = self.weight_sign*torch.exp2(self.n)
+                tmp = self.weight_sign*torch.exp2(self.n.type(torch.float32))
                 self.t = self.t.div(tmp).round()
 
                 if torch.any(self.n>0):

@@ -83,6 +83,15 @@ def get_abs(self,x:torch.Tensor)->torch.Tensor:
         abs = xreorderd.abs().max(dim=(self.numberofdims), keepdim=True).values.view(self.size)
     return abs
 
+def get_mean(self,x:torch.Tensor)->torch.Tensor:
+    if self.simple:
+        abs = x.abs().mean()
+    else:
+        xreorderd = x.permute(self.permutelist).contiguous()
+        xreorderd = xreorderd.view((*xreorderd.shape[:self.numberofdims],-1))
+        abs = xreorderd.abs().mean(dim=(self.numberofdims), keepdim=True).values.view(self.size)
+    return abs
+
 
 #################################################
 #           MODULES                             #
@@ -99,6 +108,7 @@ class Filter(nn.Module):
 
     def forward(self,x:torch.Tensor):
         # return x
+        mult = 1
         with torch.no_grad():
             if self.training:
                 if self.last_dtype!=x.dtype or x.device!=self.dev:
@@ -139,7 +149,7 @@ class Filter(nn.Module):
                         print("fixated length ")
                 out = torch.max(torch.stack(self.past,dim=1),dim=1).values
                 x.data = out.detach().clone().view(x.shape).to(x.device).type(x.dtype)
-            return x
+            return mult*x
 
 class Quant(nn.Module):
     def __init__(self, size) -> None:
@@ -219,12 +229,12 @@ class LinQuantExpScale(Quant):
 
     def forward(self, x):
         with torch.no_grad():
-            abs = get_abs(self,x)
+            abs = get_mean(self,x)
             if torch.any(abs < 1e-6):
                 print("weights to small to quantize")
                 self.delta = (
                     2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
-                return LinQuant_.apply(x*fact, expQuant.apply(self.abs), self.delta)
+                return LinQuant_.apply(x, expQuant.apply(self.abs), self.delta)
             
             # print(abs)
 

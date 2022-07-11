@@ -20,7 +20,7 @@ class ConvQAT(nn.Module):
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True):  # ch_in, ch_out, kernel, stride, padding, groups
         super().__init__()
         self.conv = Conv2dQuant_new(c1, c2, k, s, autopad(k, p), groups=g, bias=False,weight_quant_bits=8,weight_quant_channel_wise=True)
-        self.bn = BatchNorm2dBase_new(c2,outQuantDyn=True,outQuantBits=8)
+        self.bn = BatchNorm2dBase_new(c2,outQuantDyn=True,outQuantBits=14)
         self.act = LeakReLU(2**-4) if act else nn.Sequential()
 
     def forward(self, x):
@@ -166,4 +166,7 @@ class UpsampleQAT(nn.Upsample):
         super().__init__(size, scale_factor, mode, align_corners, recompute_scale_factor)
 
     def forward(self,x):
-        return super(UpsampleQAT,self).forward(x[0]), x[1]
+        if self.training:
+            return super(UpsampleQAT,self).forward(x[0]), x[1]
+        else:
+            return super(UpsampleQAT,self).forward(x[0].type(torch.float32)).type(torch.int32), x[1]
