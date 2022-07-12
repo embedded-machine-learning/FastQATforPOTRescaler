@@ -295,7 +295,7 @@ class LinQuantExpScale(Quant):
             if torch.any(abs < 1e-6):
                 print("weights to small to quantize")
                 self.delta = (
-                    2*expQuant.apply(10/(2.0**self.bits-1.0))).detach()
+                    2*expQuant.apply(2/(2.0**self.bits-1.0))).detach()
                 return LinQuant_.apply(x, expQuant.apply(10), self.delta)
             
             # print(abs)
@@ -305,12 +305,12 @@ class LinQuantExpScale(Quant):
                 self.take_new = False
             elif self.training:
                 self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs + self.mom2 *
-                            expQuant.apply(self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
+                            expQuant.apply(2*self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)/2).detach()
 
             # abs = self.filter(abs).detach().clone()
             # self.abs = (expQuant.apply(self.abs/(2.0**self.bits-1.0))* (2.0**self.bits-1.0)).detach()
 
-            self.delta = (2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
+            self.delta = (expQuant.apply(2*self.abs/(2.0**self.bits-1.0))).detach()
 
         # print((self.delta).shape)
-        return LinQuant_.apply(x, (expQuant.apply(self.abs/(2.0**self.bits-1.0))* (2.0**self.bits-1.0)), self.delta)
+        return LinQuant_.apply(x, (expQuant.apply(2*self.abs/(2.0**self.bits-1.0))* (2.0**self.bits-1.0))/2, self.delta)
