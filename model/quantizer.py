@@ -286,9 +286,9 @@ class LinQuantExpScale(Quant):
         self.filter = Filter_mean()
 
     def forward(self, x):
-        mult = 1
+        mult = 8
         with torch.no_grad():
-            abs = mult*get_abs(self,x)
+            abs = mult*get_mean(self,x)
             # print(abs.view(-1))
             # print(get_abs(self,x))
             # exit(-1)

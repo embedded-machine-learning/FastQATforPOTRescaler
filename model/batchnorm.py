@@ -294,7 +294,7 @@ def calculate_n_fixed_new(weight: torch.Tensor,
                 rexp: torch.Tensor) -> torch.Tensor:
     with torch.no_grad():
         n = torch.log2(in_quant/out_quant*weight/torch.sqrt(var+1e-5))+rexp.view(-1)
-        nr = n.mean()*torch.ones_like(n)
+        nr = n.max()*torch.ones_like(n)
         return nr
 
 def calculate_t_new(weight: torch.Tensor,
@@ -331,7 +331,7 @@ def calculate_alpha_fixed_new(weight: torch.Tensor,
                     ) -> torch.Tensor:
     with torch.no_grad():
         n = torch.log2(in_quant/out_quant*weight/torch.sqrt(var+1e-5))+rexp.view(-1)
-        n = n.mean()*torch.ones_like(n)
+        n = n.max()*torch.ones_like(n)
         nr = torch.ceil(n)
         alpha = torch.exp2(n-nr)
     return alpha
