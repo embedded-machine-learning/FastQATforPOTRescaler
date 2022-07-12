@@ -294,7 +294,7 @@ def calculate_n_fixed_new(weight: torch.Tensor,
                 rexp: torch.Tensor) -> torch.Tensor:
     with torch.no_grad():
         n = torch.log2(in_quant/out_quant*weight/torch.sqrt(var+1e-5))+rexp.view(-1)
-        nr = mean(n)*torch.ones_like(n)
+        nr = n.mean()*torch.ones_like(n)
         return nr
 
 def calculate_t_new(weight: torch.Tensor,
@@ -331,7 +331,7 @@ def calculate_alpha_fixed_new(weight: torch.Tensor,
                     ) -> torch.Tensor:
     with torch.no_grad():
         n = torch.log2(in_quant/out_quant*weight/torch.sqrt(var+1e-5))+rexp.view(-1)
-        n = mean(n)*torch.ones_like(n)
+        n = n.mean()*torch.ones_like(n)
         nr = torch.ceil(n)
         alpha = torch.exp2(n-nr)
     return alpha
@@ -345,9 +345,9 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
         self.register_buffer('t',       torch.zeros(num_features))
         self.register_buffer('alpha',  1./np.sqrt(2.)*torch.ones(num_features))
 
-        self.func_n = calculate_n_new
+        self.func_n = calculate_n_fixed_new
         self.func_t = calculate_t_new
-        self.func_a = calculate_alpha_new
+        self.func_a = calculate_alpha_fixed_new
 
         self.out_quant = LinQuantExpScale(
             outQuantBits, (1, num_features, 1, 1) if outQuantDyn else (-1,), 0.1, 0)
