@@ -181,9 +181,12 @@ class Conv2dQuant_new(nn.Conv2d):
 
         tmp = self.weight
 
-        tmp,fact = self.quantw(tmp,rexp_diff,factor_fun)
+        tmp,fact = self.quantw(tmp.type(torch.float32),rexp_diff.type(torch.float32),factor_fun)
         # tmp = self.weight
         
+        tmp = tmp.type(self.weight.dtype)
+        fact = fact.type(self.weight.dtype)
+
         if not self.training:
             # fact = 1
             tmp = torch.round(tmp*fact*(2**rexp_diff)[None, :, None, None]/self.quantw.delta)

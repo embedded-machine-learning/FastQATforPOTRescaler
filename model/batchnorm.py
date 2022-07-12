@@ -331,8 +331,8 @@ def calculate_alpha_fixed_new(weight: torch.Tensor,
                     ) -> torch.Tensor:
     with torch.no_grad():
         n = torch.log2(in_quant/out_quant*weight/torch.sqrt(var+1e-5))+rexp.view(-1)
-        n = n.max()*torch.ones_like(n)
-        nr = torch.ceil(n)
+        nr = n.max()*torch.ones_like(n)
+        nr = torch.ceil(nr)
         alpha = torch.exp2(n-nr)
     return alpha
 
@@ -345,7 +345,7 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
         self.register_buffer('t',       torch.zeros(num_features))
         self.register_buffer('alpha',  1./np.sqrt(2.)*torch.ones(num_features))
 
-        self.func_n = calculate_n_fixed_new
+        self.func_n = calculate_n_new
         self.func_t = calculate_t_new
         self.func_a = calculate_alpha_fixed_new
 
@@ -450,7 +450,8 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                                     n=self.n.view(-1)).detach()
                 
                 # print(f"n : {self.n.view(-1)}")
-                self.n = torch.ceil(self.n)
+                self.n = self.n.max()*torch.ones_like(self.n)
+                self.n = torch.ceil(self.n).detach()
                 tmp = self.weight_sign*torch.exp2(self.n.type(torch.float32))
                 self.t = self.t.div(tmp).round()
 
