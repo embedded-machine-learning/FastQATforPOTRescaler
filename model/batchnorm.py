@@ -284,6 +284,19 @@ def calculate_n_new(weight: torch.Tensor,
         n = torch.log2(in_quant/out_quant*weight/torch.sqrt(var+1e-5))+rexp.view(-1)
         return n
 
+
+def calculate_n_fixed_new(weight: torch.Tensor,
+                bias: torch.Tensor,
+                mean: torch.Tensor,
+                var: torch.Tensor,
+                in_quant: torch.Tensor,
+                out_quant: torch.Tensor,
+                rexp: torch.Tensor) -> torch.Tensor:
+    with torch.no_grad():
+        n = torch.log2(in_quant/out_quant*weight/torch.sqrt(var+1e-5))+rexp.view(-1)
+        nr = mean(n)*torch.ones_like(n)
+        return nr
+
 def calculate_t_new(weight: torch.Tensor,
                 bias: torch.Tensor,
                 mean: torch.Tensor,
@@ -305,6 +318,20 @@ def calculate_alpha_new(weight: torch.Tensor,
                     ) -> torch.Tensor:
     with torch.no_grad():
         n = torch.log2(in_quant*weight/(out_quant*torch.sqrt(var+1e-5)))+rexp.view(-1)
+        nr = torch.ceil(n)
+        alpha = torch.exp2(n-nr)
+    return alpha
+
+def calculate_alpha_fixed_new(weight: torch.Tensor,
+                    mean: torch.Tensor,
+                    var: torch.Tensor,
+                    in_quant: torch.Tensor,
+                    out_quant: torch.Tensor,
+                    rexp: torch.Tensor,
+                    ) -> torch.Tensor:
+    with torch.no_grad():
+        n = torch.log2(in_quant/out_quant*weight/torch.sqrt(var+1e-5))+rexp.view(-1)
+        n = mean(n)*torch.ones_like(n)
         nr = torch.ceil(n)
         alpha = torch.exp2(n-nr)
     return alpha

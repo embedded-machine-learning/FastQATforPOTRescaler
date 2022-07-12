@@ -89,16 +89,16 @@ def get_mean(self,x:torch.Tensor)->torch.Tensor:
     else:
         xreorderd = x.permute(self.permutelist).contiguous()
         xreorderd = xreorderd.view((*xreorderd.shape[:self.numberofdims],-1))
-        abs = xreorderd.abs().mean(dim=(self.numberofdims), keepdim=True).values.view(self.size)
+        abs = xreorderd.abs().mean(dim=(self.numberofdims), keepdim=True).view(self.size)
     return abs
 
 
 #################################################
 #           MODULES                             #
 #################################################
-class Filter(nn.Module):
+class Filter_max(nn.Module):
     def __init__(self) -> None:
-        super(Filter,self).__init__()
+        super(Filter_max,self).__init__()
         self.past=[]
         self.epoch_length=-1
         self.last_training=False
@@ -151,6 +151,62 @@ class Filter(nn.Module):
                 x.data = out.detach().clone().view(x.shape).to(x.device).type(x.dtype)
             return mult*x
 
+class Filter_mean(nn.Module):
+    def __init__(self) -> None:
+        super(Filter_mean,self).__init__()
+        self.past=[]
+        self.epoch_length=-1
+        self.last_training=False
+        self.i=0 
+        self.last_dtype = None
+        self.dev = None
+
+    def forward(self,x:torch.Tensor):
+        # return x
+        mult = 1
+        x = x.type(torch.float)
+        with torch.no_grad():
+            if self.training:
+                if self.last_dtype!=x.dtype or x.device!=self.dev:
+                    print("Reseting Filter")
+                    self.last_dtype = x.dtype
+                    self.past=[]
+                    self.epoch_length=-1
+                    self.i=0
+                    self.dev=x.device
+
+                if not self.last_training:
+                    self.last_training=True
+                    self.i=0
+                
+                if self.epoch_length==-1:
+                    self.past.append(x.view(-1).detach().clone())
+                else:
+                    if self.i >= self.epoch_length:
+                        print("incorrect epoch length")
+                        self.past.append(x.view(-1).detach().clone())
+                        self.epoch_length=-1
+                    else: 
+                        self.past[self.i]=x.view(-1).detach().clone()
+                        pass
+                # if (self.epoch_length==-1 and self.i==0) or self.epoch_length==1:
+                #     out = self.past[0]
+                # else:
+                out = torch.mean(torch.stack(self.past,dim=1),dim=1,keepdim=True)
+                # print(out.shape)
+                # print(x.shape)
+                x.data = out.detach().clone().view(x.shape).to(x.device).type(x.dtype)
+                self.i += 1
+            else:
+                if self.last_training:
+                    self.last_training=False
+                    if self.epoch_length==-1:
+                        self.epoch_length=self.i
+                        print("fixated length ")
+                out = torch.mean(torch.stack(self.past,dim=1),dim=1)
+                x.data = out.detach().clone().view(x.shape).to(x.device).type(x.dtype)
+            return mult*x
+
 class Quant(nn.Module):
     def __init__(self, size) -> None:
         super(Quant, self).__init__()
@@ -190,7 +246,7 @@ class LinQuant(Quant):
         self.mom1 = mom1
         self.mom2 = mom2
 
-        self.filter = Filter()
+        self.filter = Filter_max()
 
     def forward(self, x:torch.Tensor, fact=1):
         with torch.no_grad():
@@ -227,14 +283,20 @@ class LinQuantExpScale(Quant):
         self.mom1 = mom1
         self.mom2 = mom2
 
+        self.filter = Filter_mean()
+
     def forward(self, x):
+        mult = 1
         with torch.no_grad():
-            abs = get_mean(self,x)
+            abs = mult*get_abs(self,x)
+            # print(abs.view(-1))
+            # print(get_abs(self,x))
+            # exit(-1)
             if torch.any(abs < 1e-6):
                 print("weights to small to quantize")
                 self.delta = (
-                    2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
-                return LinQuant_.apply(x, expQuant.apply(self.abs), self.delta)
+                    2*expQuant.apply(10/(2.0**self.bits-1.0))).detach()
+                return LinQuant_.apply(x, expQuant.apply(10), self.delta)
             
             # print(abs)
 
@@ -245,8 +307,10 @@ class LinQuantExpScale(Quant):
                 self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs + self.mom2 *
                             expQuant.apply(self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
 
-            self.delta = (
-                2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
+            # abs = self.filter(abs).detach().clone()
+            # self.abs = (expQuant.apply(self.abs/(2.0**self.bits-1.0))* (2.0**self.bits-1.0)).detach()
+
+            self.delta = (2*expQuant.apply(self.abs/(2.0**self.bits-1.0))).detach()
 
         # print((self.delta).shape)
-        return LinQuant_.apply(x, expQuant.apply(self.abs), self.delta)
+        return LinQuant_.apply(x, (expQuant.apply(self.abs/(2.0**self.bits-1.0))* (2.0**self.bits-1.0)), self.delta)
