@@ -337,7 +337,7 @@ def calculate_alpha_fixed_new(weight: torch.Tensor,
     return alpha
 
 class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
-    def __init__(self, num_features, eps=0.00001, momentum=0.1, affine=True, track_running_stats=True, device=None, dtype=None, outQuantBits=8, outQuantDyn=False):
+    def __init__(self, num_features, eps=0.00001, momentum=0.1, affine=True, track_running_stats=True, device=None, dtype=None, outQuantBits=8, outQuantDyn=False, fixed_n = False):
         super(BatchNorm2dBase_new, self).__init__(num_features, eps, momentum,
                                               affine, track_running_stats, device, dtype)
 
@@ -347,7 +347,11 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
 
         self.func_n = calculate_n_new
         self.func_t = calculate_t_new
-        self.func_a = calculate_alpha_fixed_new
+        self.fixed_n = fixed_n
+        if fixed_n:
+            self.func_a = calculate_alpha_fixed_new
+        else:
+            self.func_a = calculate_alpha_new
 
         self.out_quant = LinQuantExpScale(
             outQuantBits, (1, num_features, 1, 1) if outQuantDyn else (-1,), 0.1, 0)
@@ -450,7 +454,8 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                                     n=self.n.view(-1)).detach()
                 
                 # print(f"n : {self.n.view(-1)}")
-                self.n = self.n.max()*torch.ones_like(self.n)
+                if self.fixed_n:
+                    self.n = self.n.max()*torch.ones_like(self.n)
                 self.n = torch.ceil(self.n).detach()
                 tmp = self.weight_sign*torch.exp2(self.n.type(torch.float32))
                 self.t = self.t.div(tmp).round()
