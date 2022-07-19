@@ -1,7 +1,7 @@
 from .convolution   import Conv2dQuant_new
 from .batchnorm     import BatchNorm2dBase_new
 from .activations   import LeakReLU
-from .layer         import MaxPool
+from .layer         import MaxPool,AddQAT
 
 import torch.nn as nn
 from torch.nn.common_types import _size_any_t,_ratio_any_t,Optional
@@ -37,57 +37,6 @@ class ConvQAT(nn.Module):
 
     def forward_fuse(self, x):
         return self.forward(x) 
-        
-# def AddQAT(a,b):
-#     arexp = a[1]
-#     brexp = b[1]
-#     return a[0]+b[0],a[1]
-
-
-class AddQAT_(torch.autograd.Function):
-    @staticmethod
-    def forward(_,a,b,a_shift,b_shift,rexp,training):
-        with torch.no_grad():
-            if training:
-                va = (a*torch.exp2(-rexp).view(-1)[None,:,None,None]).floor()
-                vb = (b*torch.exp2(-rexp).view(-1)[None,:,None,None]).floor()
-            else:
-                va = a.mul(torch.exp2(-a_shift).view(-1)[None,:,None,None]).floor()
-                vb = b.mul(torch.exp2(-b_shift).view(-1)[None,:,None,None]).floor()
-            #explicit quant domaine
-            va = va.add(vb)
-
-            #done
-            if training:
-                va = va.mul(torch.exp2(rexp).view(-1)[None,:,None,None])
-
-            return va
-
-    @staticmethod
-    def backward(_,outgrad):
-        return outgrad.detach(),outgrad.detach(),None,None,None,None
-
-class AddQAT(nn.Module):
-    def __init__(self) -> None:
-        super(AddQAT,self).__init__()
-
-        self.register_buffer('a_shift',torch.Tensor([0.0]))
-        self.register_buffer('b_shift',torch.Tensor([0.0]))
-
-    def forward(self,a,b):
-        if a[0].shape!=b[0].shape:
-            raise torch.ErrorReport("testW")
-        arexp = a[1]
-        brexp = b[1]
-        rexp = torch.max(arexp,brexp)
-        self.a_shift = -(arexp-rexp).detach()
-        self.b_shift = -(brexp-rexp).detach()
-        out = AddQAT_.apply(a[0],b[0],self.a_shift,self.b_shift,rexp,self.training)
-        # print("AddQAT")
-        # print(out.shape,a[0].shape)
-        return out,rexp
-
-
             
 
 class BottleneckQAT(nn.Module):

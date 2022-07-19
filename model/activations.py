@@ -31,3 +31,11 @@ class LeakReLU(torch.nn.LeakyReLU):
 
     def convert(self):
         return LeakReLU_(self.negative_slope,self.inplace)
+
+class ReLU(torch.nn.ReLU):
+    def __init__(self, inplace: bool = False):
+        super().__init__(inplace)
+
+    def forward(self,input: Tuple[torch.Tensor,torch.Tensor]):
+        x,rexp = input
+        return super.forward(x) ,rexp

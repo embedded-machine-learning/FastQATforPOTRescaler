@@ -184,14 +184,63 @@ class BlockQuantNwoA(BlockQuantN):
                                              groups, outQuantBits, outQuantDyn, weight_quant_bits, weight_quant_channel_wise)
         self.activation = nn.Sequential()
 
+
+#########################################################################################
+#                                   Common Layers                                       #
+#########################################################################################
+
+
+class AddQAT_(torch.autograd.Function):
+    @staticmethod
+    def forward(_,a,b,a_shift,b_shift,rexp,training):
+        with torch.no_grad():
+            if training:
+                va = (a*torch.exp2(-rexp).view(-1)[None,:,None,None]).floor()
+                vb = (b*torch.exp2(-rexp).view(-1)[None,:,None,None]).floor()
+            else:
+                va = a.mul(torch.exp2(-a_shift).view(-1)[None,:,None,None]).floor()
+                vb = b.mul(torch.exp2(-b_shift).view(-1)[None,:,None,None]).floor()
+            #explicit quant domaine
+            va = va.add(vb)
+
+            #done
+            if training:
+                va = va.mul(torch.exp2(rexp).view(-1)[None,:,None,None])
+
+            return va
+
+    @staticmethod
+    def backward(_,outgrad):
+        return outgrad.detach(),outgrad.detach(),None,None,None,None
+
+class AddQAT(nn.Module):
+    def __init__(self) -> None:
+        super(AddQAT,self).__init__()
+
+        self.register_buffer('a_shift',torch.Tensor([0.0]))
+        self.register_buffer('b_shift',torch.Tensor([0.0]))
+
+    def forward(self,a,b):
+        if a[0].shape!=b[0].shape:
+            raise torch.ErrorReport("testW")
+        arexp = a[1]
+        brexp = b[1]
+        rexp = torch.max(arexp,brexp)
+        self.a_shift = -(arexp-rexp).detach()
+        self.b_shift = -(brexp-rexp).detach()
+        out = AddQAT_.apply(a[0],b[0],self.a_shift,self.b_shift,rexp,self.training)
+        # print("AddQAT")
+        # print(out.shape,a[0].shape)
+        return out,rexp
+
 #########################################################################################
 #                                   ENCAPSULATED                                        #
 #########################################################################################
 
 
-class MaxPool(nn.MaxPool2d):
+class MaxPool2d(nn.MaxPool2d):
     def __init__(self, kernel_size: _size_any_t, stride: Optional[_size_any_t] = None, padding:  _size_any_t = 0, dilation:  _size_any_t = 1, return_indices: bool = False, ceil_mode: bool = False) -> None:
-        super(MaxPool, self).__init__(kernel_size, stride,
+        super(MaxPool2d, self).__init__(kernel_size, stride,
                                       padding, dilation, return_indices, ceil_mode)
 
     def convert(self):
@@ -209,3 +258,4 @@ class MaxPool(nn.MaxPool2d):
                             self.padding, self.dilation, self.ceil_mode,
                             self.return_indices).type(torch.int32),rexp)
         
+
