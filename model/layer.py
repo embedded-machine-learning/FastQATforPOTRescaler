@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional, Tuple
-from torch.nn.common_types import _size_any_t, Tensor
+from torch.nn.common_types import _size_any_t, Tensor, _size_any_opt_t
 from .batchnorm import *
 
 import numpy as np
@@ -257,5 +257,25 @@ class MaxPool2d(nn.MaxPool2d):
             return (F.max_pool2d(val.type(torch.float32), self.kernel_size, self.stride,
                             self.padding, self.dilation, self.ceil_mode,
                             self.return_indices).type(torch.int32),rexp)
-        
+
+class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d):
+    def __init__(self, output_size: _size_any_opt_t) -> None:
+        super().__init__(output_size)
+    def forward(self, x:Tuple[torch.Tensor,torch.Tensor]) -> Tuple[torch.Tensor,torch.Tensor]:
+        # does nopt modify the channels so simple wrapping and floor should be enough
+        val, rexp = x
+
+        val = super().forward(val)
+
+        if self.training:
+            with torch.no_grad():
+                val.data = val.data/torch.exp2(rexp.view(-1)[None,:,None,None])
+                val.data = val.data.floor()
+                val.data = val.data*torch.exp2(rexp.view(-1)[None,:,None,None])
+                    
+        else:
+            val = val.floor()
+
+        return val, rexp
+
 
