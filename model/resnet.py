@@ -10,7 +10,7 @@ from torchvision.models._utils  import _ovewrite_named_param
 from .convolution   import Conv2dQuant_new
 from .batchnorm     import BatchNorm2dBase_new
 from .activations   import ReLU
-from .layer         import AddQAT, MaxPool2d, Start, Stop, AdaptiveAvgPool2d
+from .layer         import AddQAT, MaxPool2d, Start, Stop, AdaptiveAvgPool2d, Flatten
 from .Linear        import Linear
 
 ####################################################################################
@@ -31,13 +31,42 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
         bias=False,
         dilation=dilation,
         weight_quant_bits=8,
-        weight_quant_channel_wise=True
+        weight_quant_channel_wise=True,
+        out_quant_bits=8,
+        out_quant_channel_wise=True
     )
 
 
 def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> Conv2dQuant_new:
     """1x1 convolution"""
-    return Conv2dQuant_new(in_planes, out_planes, kernel_size=1, stride=stride, bias=False,weight_quant_bits=8,weight_quant_channel_wise=True)
+    return Conv2dQuant_new(
+        in_planes, 
+        out_planes, 
+        kernel_size=1, 
+        stride=stride, 
+        bias=False,
+        weight_quant_bits=8,
+        weight_quant_channel_wise=True,
+        out_quant_bits=8,
+        out_quant_channel_wise=True
+    )
+
+class Downsample_Block(nn.Module):
+    def __init__(self,inplanes,planes,expansion,stride) -> None:
+        super().__init__()
+        self.inplanes   = inplanes
+        self.planes     = planes
+        self.expansion  = expansion
+        self.stride     = stride
+
+        self.conv   = conv1x1(inplanes,planes*expansion,stride)
+        self.bn     = BatchNorm2dBase_new(planes * expansion)
+
+    def forward(self,x):
+        fact1 = self.bn.get_weight_factor()
+        x = self.conv(x,fact1)
+        x = self.bn(x,self.conv.quantw.delta.detach())
+        return x
 
 
 class BasicBlock(nn.Module):
@@ -73,22 +102,18 @@ class BasicBlock(nn.Module):
 
     def forward(self, x: Tuple[torch.Tensor,torch.Tensor]) -> Tuple[torch.Tensor,torch.Tensor]:
         identity = x
-
         fact1 = self.bn1.get_weight_factor()
         out = self.conv1(x,fact1)
         out = self.bn1(out,self.conv1.quantw.delta.detach())
         out = self.relu(out)
-
         fact2 = self.bn2.get_weight_factor()
         out = self.conv2(out,fact2)
         out = self.bn2(out,self.conv2.quantw.delta.detach())
-
         if self.downsample is not None:
             identity = self.downsample(x)
 
         out = self.add(out,identity)
         out = self.relu(out)
-
         return out
 
 
@@ -197,7 +222,7 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
 
         self.avgpool = AdaptiveAvgPool2d((1, 1))
-        self.fc = Linear(512 * block.expansion, num_classes)
+        self.fc = Linear(512 * block.expansion, num_classes,weight_quant_channel_wise=True,out_quant_channel_wise=True,out_quant_bits=16)
 
         self.start = Start(8)
         self.stop = Stop()
@@ -234,10 +259,7 @@ class ResNet(nn.Module):
             self.dilation *= stride
             stride = 1
         if stride != 1 or self.inplanes != planes * block.expansion:
-            downsample = nn.Sequential(
-                conv1x1(self.inplanes, planes * block.expansion, stride),
-                norm_layer(planes * block.expansion),
-            )
+            downsample = Downsample_Block(self.inplanes,planes,block.expansion,stride) 
 
         layers = []
         layers.append(
@@ -264,19 +286,22 @@ class ResNet(nn.Module):
         # See note [TorchScript super()]
 
         x = self.start(x)
+
+        
         fact1 = self.bn1.get_weight_factor()
         x = self.conv1(x,fact1)
         x = self.bn1(x,self.conv1.quantw.delta.detach())
         x = self.relu(x)
         x = self.maxpool(x)
-
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
 
+
+
         x = self.avgpool(x)
-        x = torch.flatten(x, 1)
+        x = Flatten(x,1)
         x = self.fc(x)
 
         x = self.stop(x)
@@ -304,3 +329,30 @@ def _resnet(
 
     return model
 
+
+
+
+import torchvision
+
+def resnet18(*, weights = None, progress: bool = True, **kwargs: Any) -> ResNet:
+    """ResNet-18 from `Deep Residual Learning for Image Recognition <https://arxiv.org/pdf/1512.03385.pdf>`__.
+
+    Args:
+        weights (:class:`~torchvision.models.ResNet18_Weights`, optional): The
+            pretrained weights to use. See
+            :class:`~torchvision.models.ResNet18_Weights` below for
+            more details, and possible values. By default, no pre-trained
+            weights are used.
+        progress (bool, optional): If True, displays a progress bar of the
+            download to stderr. Default is True.
+        **kwargs: parameters passed to the ``torchvision.models.resnet.ResNet``
+            base class. Please refer to the `source code
+            <https://github.com/pytorch/vision/blob/main/torchvision/models/resnet.py>`_
+            for more details about this class.
+
+    .. autoclass:: torchvision.models.ResNet18_Weights
+        :members:
+    """
+    weights = torchvision.models.resnet.ResNet18_Weights.verify(weights)
+
+    return _resnet(BasicBlock, [2, 2, 2, 2], weights, progress, **kwargs)

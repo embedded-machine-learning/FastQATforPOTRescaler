@@ -38,7 +38,9 @@ class Stopfn(torch.autograd.Function):
     def forward(self, val: Tensor, rexp: Tensor, training: bool,dtype):
         with torch.no_grad():
             if not training:
-                val = val.type(dtype).div(2**(-rexp.view(-1)[None, :, None, None]))
+                shape = [1 for _ in range(len(val.shape))]
+                shape[1]=-1
+                val = val.type(dtype).div(2**(-rexp.view(*shape)))
         return val
 
     @staticmethod
@@ -232,6 +234,11 @@ class AddQAT(nn.Module):
         # print("AddQAT")
         # print(out.shape,a[0].shape)
         return out,rexp
+
+def Flatten(input: Tuple[torch.Tensor, torch.Tensor], dim:int) -> Tuple[torch.Tensor, torch.Tensor]:
+    val , rexp = input
+    orexp = rexp.detach()*torch.ones_like(val[0,:])
+    return val.flatten(dim), orexp.flatten(dim)
 
 #########################################################################################
 #                                   ENCAPSULATED                                        #

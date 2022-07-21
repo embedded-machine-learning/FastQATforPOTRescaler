@@ -38,4 +38,4 @@ class ReLU(torch.nn.ReLU):
 
     def forward(self,input: Tuple[torch.Tensor,torch.Tensor]):
         x,rexp = input
-        return super.forward(x) ,rexp
+        return super().forward(x) ,rexp

@@ -1,8 +1,9 @@
 from typing import Tuple
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
-from .quantizer import Quant, get_abs, LinQuantExpScale
+from .quantizer import Quant, get_abs, LinQuantExpScale, LinQuant, FakeQuant
 from .utils     import checkNan
 
 
@@ -13,11 +14,15 @@ class WeightQuantLinear_(torch.autograd.Function):
     @staticmethod
     def forward(self, x, abs, delta,rexp_diff,fact):
         with torch.no_grad():
-            x = x*(2**rexp_diff)[ None, :]*fact
+            # print("x.shape",x.shape)
+            # print("rexp_diff.shape",rexp_diff.shape)
+            # print("fact.shape",fact.shape)
+            x = (x*(2**rexp_diff.view(1,-1)))*fact.view(-1,1)
             self.save_for_backward(x, abs)
             x = x.clamp(-abs, abs)
             x = x.div(delta, rounding_mode="floor").mul(delta)
-            x = x/((2**rexp_diff)[None, :]*fact)
+            x = x/((2**rexp_diff.view(1,-1))*fact.view(-1,1))
+            # print(x.shape)
             if torch.any(torch.isnan(x)):
                 print("nan in WeightQuantLinear_ forward")
             return x
@@ -51,6 +56,7 @@ class WeightQuantLinear(Quant):
     def forward(self, x:torch.Tensor,rexp_diff, fact_fun=None):
         with torch.no_grad():
             abs = get_abs(self,x*(2**rexp_diff)[None, :])
+            # print(abs.shape)
             if torch.any(abs < 1e-6):
                 print("weights to small to quantize")
                 self.delta = (2*(self.abs.type(abs.dtype)/(2.0**self.bits.type(abs.dtype)-1.0))).detach().type(abs.dtype)
@@ -72,7 +78,7 @@ class WeightQuantLinear(Quant):
                 fact = fact_fun(self.delta)
             else:
                 fact = 1
-            if torch.any(torch.isnan(self.delta)):
+            if torch.any(torch.isnan(self.delta)) or torch.any(torch.isnan(fact)):
                 print("nan in WeightQuantLinear weights")
         # print((self.delta).shape)
         return WeightQuantLinear_.apply(x, self.abs, self.delta,rexp_diff,fact),fact
@@ -104,7 +110,7 @@ class Linear(nn.Linear):
             out_quant_args =    (   out_quant_bits,
                                     (-1,) if not out_quant_channel_wise else (1,out_features),
                                     0.1,
-                                    0.1
+                                    0.01
                                 )
         
         if out_quant == None:
@@ -114,11 +120,15 @@ class Linear(nn.Linear):
 
         self.register_buffer('quant_weight', torch.zeros_like(self.weight))
         self.register_buffer('n', torch.zeros((out_features if out_quant_channel_wise else 1)))
-        self.register_buffer('t', torch.zeros((out_features)))
+        if bias:
+            self.register_buffer('t', torch.zeros((out_features)))
+        else:
+            self.t = None
     
     def get_weight_factor(self,delta_I,delta_O):
         def fun(delta_W):
             with torch.no_grad():
+                # print(delta_I,delta_O,delta_W)
                 n = delta_W.view(-1)*delta_I.view(-1)/delta_O.view(-1)
                 n = torch.log2(n)
                 nr = torch.ceil(n)
@@ -139,33 +149,53 @@ class Linear(nn.Linear):
         orexp = (torch.mean(rexp)).squeeze()
         rexp_diff = rexp.squeeze() - orexp.unsqueeze(-1)
 
-        tmp = self.weight
+        weight = self.weight
 
         if factor_fun==None:
-            tmp,fact = self.quantw(tmp.type(torch.float32),rexp_diff.type(torch.float32),self.get_weight_factor(orexp.detach(),self.out_quant.delta.detach()))
+            weight,fact = self.quantw(weight.type(torch.float32),rexp_diff.type(torch.float32),self.get_weight_factor(orexp.detach().view(-1).exp2(),self.out_quant.delta.view(-1).detach()))
         else:
-            tmp,fact = self.quantw(tmp.type(torch.float32),rexp_diff.type(torch.float32),factor_fun)
-        # tmp = self.weight
+            weight,fact = self.quantw(weight.type(torch.float32),rexp_diff.type(torch.float32),factor_fun)
+        # weight = self.weight
         
-        tmp = tmp.type(self.weight.dtype)
+        weight = weight.type(self.weight.dtype)
         fact = fact.type(self.weight.dtype)
+
+        if self.bias == None: 
+            bias = None
+        else:
+            bias_fact = (orexp.detach().exp2().view(-1)*self.quantw.delta.view(-1).detach())/fact.view(-1).detach()
+            # print(bias_fact)
+            bias = FakeQuant.apply(self.bias,bias_fact)
 
         if not self.training:
             # fact = 1
-            tmp = torch.round(tmp*fact*(2**rexp_diff)[None, :]/self.quantw.delta)
-            tmp = checkNan.apply( tmp, "Linear tmp 2").type(torch.int32)
-            # print(tmp)
+            weight = torch.round(weight*fact.view(-1,1)*(2**rexp_diff.view(1,-1))/self.quantw.delta.view(-1,1).detach())
+            weight = checkNan.apply( weight, "Linear weight 2").type(torch.int32)
+            if bias!=None:
+                # print(bias)
+                bias = torch.round(bias/bias_fact)
+                # print(bias)
+                self.t = bias.detach()
+            else:
+                self.t = None
+            # print(weight)
             # only nessesary as /delta can have a slight relative error ~1e-6 in calculations
-            self.quant_weight = tmp.detach()
+            self.quant_weight = weight.detach()
+            self.n = self.calculate_n(self.quantw.delta.view(-1).detach(),2**orexp.view(-1).detach(),self.out_quant.delta.view(-1).detach())
+            # print(self.n)
+            
 
-        if torch.any(torch.isnan(tmp)):
+        if torch.any(torch.isnan(weight)):
             print(torch.max(torch.abs(self.weight.view(-1))))
 
         input = checkNan.apply( input, "Linear input")
         if self.training:
-            out = self._conv_forward(input, tmp, None)
+            # print("input.shape",input.shape)
+            # print("weight.shape",weight.shape)
+            # print("bias.shape",bias.shape)
+            out = F.linear(input, weight, bias)
         else:
-            out = self._conv_forward(input.type(torch.float32), tmp.type(torch.float32), None).type(torch.int32)
+            out = F.linear(input.type(torch.float32), weight.type(torch.float32), bias.type(torch.float32)).type(torch.int32)
         # if torch.any(torch.isnan(out-out.round())):
         #     print("WTF")
         # if not self.training and (out-out.round()).abs().max()!=0:
@@ -174,8 +204,8 @@ class Linear(nn.Linear):
         if factor_fun == None:
             if self.training:
                 out = self.out_quant(out)
-                return out, torch.log2(self.out_quant.delta)
             else:
-                out = torch.floor(out.mul(torch.exp2(self.calculate_n()))) 
+                out = torch.floor(out.mul(torch.exp2(self.n))) 
+            return out, torch.log2(self.out_quant.delta.detach())
         else:
             return out, orexp

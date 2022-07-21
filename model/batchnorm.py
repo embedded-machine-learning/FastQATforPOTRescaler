@@ -416,8 +416,13 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                                     n=self.n.view(-1)).detach()
 
                 if torch.any(self.n>0):
-                    print("BN to big n high inaccuracy", self.n.view(-1))
-
+                    print("BN to big n high inaccuracy",    self.n.view(-1))
+                    print("weight:",                        torch.abs(self.weight.view(-1)))
+                    print("var:",                           self.running_var.view(-1))
+                    print("in_quant",                       self.in_quant.view(-1))
+                    print("out_quant",                      self.out_quant.delta.view(-1))
+                    print("rexp",                           self.rexp.view(-1))
+                    
                 # self.t = self.t.clamp(-(2**(self.outQuantBits-1)),
                 #                     2**(self.outQuantBits-1) - 1).detach()
                 tmp = self.weight_sign*torch.exp2(self.n-self.rexp.view(-1))/self.in_quant.view(-1)
@@ -461,7 +466,13 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
                 self.t = self.t.div(tmp).round()
 
                 if torch.any(self.n>0):
-                    print("BN to big n high inaccuracy", self.n.view(-1))
+                    print("BN to big n high inaccuracy",    self.n.view(-1))
+                    print("weight:",                        torch.abs(self.weight.view(-1)))
+                    print("var:",                           self.running_var.view(-1))
+                    print("in_quant",                       self.in_quant.view(-1))
+                    print("out_quant",                      self.out_quant.delta.view(-1))
+                    print("rexp",                           self.rexp.view(-1))
+
                 self.n = checkNan.apply(self.n,"BN self.n")
                 self.t = checkNan.apply(self.t,"BN self.t")
                 tmp = checkNan.apply(tmp,"BN tmp")
