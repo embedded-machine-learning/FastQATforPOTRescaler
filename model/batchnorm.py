@@ -377,18 +377,18 @@ class BatchNorm2dBase_new(torch.nn.BatchNorm2d):
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor], in_quant=None) -> Tuple[torch.Tensor, torch.Tensor]:
         x, rexp = input
-        x = checkNan.apply(x,"BN in")
+        # x = checkNan.apply(x,"BN in")
         if in_quant is not None:
             self.in_quant = in_quant.detach()
         self.rexp = rexp.detach()
         xorig = x.detach().clone()
         # if self.training:
-        checkNan.apply(xorig,"BN post clone")
+        # checkNan.apply(xorig,"BN post clone")
         if x.dtype == torch.int32:
             x = super().forward(x.type(self.weight.dtype))
         else:
             x = super().forward(x)
-        checkNan.apply(xorig,"BN post true bn")
+        # checkNan.apply(xorig,"BN post true bn")
         # else:
         #     x = super().forward(x*self.in_quant.view(-1)[None,:,None,None])
         self.weight_sign = torch.sign(self.weight).detach()

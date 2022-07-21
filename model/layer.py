@@ -126,7 +126,7 @@ class Stop(nn.Module):
     def forward(self, invals: Tuple[Tensor, Tensor]) -> Tensor:
         self.exp = invals[1].detach().clone()
         x = Stopfn.apply(invals[0], invals[1], self.training, self.for_dtype.dtype)
-        x = checkNan.apply(x,"Stop")       # removes nan from backprop
+        # x = checkNan.apply(x,"Stop")       # removes nan from backprop
         return x
 
 

@@ -252,10 +252,10 @@ class LinQuant(Quant):
         with torch.no_grad():
             abs = get_abs(self,x)
             # print(abs)
-            if torch.any(abs < 1e-6):
-                print("weights to small to quantize")
-                self.delta = (2*(self.abs/(2.0**self.bits-1))).detach()
-                return LinQuant_.apply(x*fact, self.abs, self.delta, self.bits)
+            # if torch.any(abs < 1e-6):
+            #     print("weights to small to quantize")
+            #     self.delta = (2*(self.abs/(2.0**self.bits-1))).detach()
+            #     return LinQuant_.apply(x*fact, self.abs, self.delta, self.bits)
 
             # if self.training and self.take_new:
             #     self.abs = abs.detach()
@@ -265,7 +265,8 @@ class LinQuant(Quant):
             #     # print(f" abs diff:  {(abs.view(-1)-self.abs.view(-1)).abs().max()}")
             #     self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs + self.mom2 *
             #                 (self.abs/(2.0**self.bits-1.0)) * (2.0**self.bits-1.0)).detach()
-            self.abs = self.filter(abs).detach().clone()
+            # self.abs = self.filter(abs).detach().clone()
+            self.abs = ((1-self.mom1-self.mom2)*self.abs + self.mom1*abs).detach()
             # print(f" old delta: {self.delta.view(-1)}")
             self.delta = (2*(self.abs/(2.0**self.bits-1))).detach()
             # print(f" new delta: {self.delta.view(-1)}")

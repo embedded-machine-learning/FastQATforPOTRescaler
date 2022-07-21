@@ -170,7 +170,7 @@ class Linear(nn.Linear):
         if not self.training:
             # fact = 1
             weight = torch.round(weight*fact.view(-1,1)*(2**rexp_diff.view(1,-1))/self.quantw.delta.view(-1,1).detach())
-            weight = checkNan.apply( weight, "Linear weight 2").type(torch.int32)
+            # weight = checkNan.apply( weight, "Linear weight 2").type(torch.int32)
             if bias!=None:
                 # print(bias)
                 bias = torch.round(bias/bias_fact)
@@ -185,10 +185,10 @@ class Linear(nn.Linear):
             # print(self.n)
             
 
-        if torch.any(torch.isnan(weight)):
-            print(torch.max(torch.abs(self.weight.view(-1))))
+        # if torch.any(torch.isnan(weight)):
+        #     print(torch.max(torch.abs(self.weight.view(-1))))
 
-        input = checkNan.apply( input, "Linear input")
+        # input = checkNan.apply( input, "Linear input")
         if self.training:
             # print("input.shape",input.shape)
             # print("weight.shape",weight.shape)

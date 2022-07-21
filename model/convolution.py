@@ -167,7 +167,7 @@ class Conv2dQuant_new(nn.Conv2d):
         if not self.training:
             # fact = 1
             weight = torch.round(weight*fact*(2**rexp_diff)[None, :, None, None]/self.quantw.delta)
-            weight = checkNan.apply( weight, "conv weight 2").type(torch.int32)
+            # weight = checkNan.apply( weight, "conv weight 2").type(torch.int32)
             if bias!=None:
                 # print(bias)
                 bias = torch.round(bias/bias_fact)
@@ -181,10 +181,10 @@ class Conv2dQuant_new(nn.Conv2d):
             self.n = self.calculate_n(self.quantw.delta.view(-1).detach(),2**orexp.view(-1).detach(),self.out_quant.delta.view(-1).detach()).view(1,-1,1,1)
             
 
-        if torch.any(torch.isnan(weight)):
-            print(torch.max(torch.abs(self.weight.view(-1))))
+        # if torch.any(torch.isnan(weight)):
+        #     print(torch.max(torch.abs(self.weight.view(-1))))
 
-        input = checkNan.apply( input, "conv input")
+        # input = checkNan.apply( input, "conv input")
         if self.training:
             out = self._conv_forward(input, weight, bias)
         else:

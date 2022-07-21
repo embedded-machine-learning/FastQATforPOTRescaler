@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 import numpy as np
 
-from .layer import BlockQuantN,BlockQuantNwoA,MaxPool,Start,Stop
+from .layer import BlockQuantN,BlockQuantNwoA,Start,Stop
 from .yolo import YOLOLayer
 
 
