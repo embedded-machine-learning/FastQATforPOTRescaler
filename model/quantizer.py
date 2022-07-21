@@ -29,7 +29,7 @@ class LinQuant_(torch.autograd.Function):
         with torch.no_grad():
             self.save_for_backward(x, abs)
             # x = x.clamp(-abs, abs)
-            x = x.div(delta,rounding_mode = "floor").clamp(-2**(bits-1),2**(bits-1)-1).mul(delta)
+            x = x.div(delta,rounding_mode = "floor").clamp_(-2**(bits-1),2**(bits-1)-1).mul_(delta)
             if torch.any(torch.isnan(x)):
                 print("nan in Linquant forward")
             return x
@@ -336,11 +336,11 @@ class LinQuant_new_(torch.autograd.Function):
     @staticmethod
     def forward(self, x, abs, delta,rexp_diff,fact):
         with torch.no_grad():
-            x = x*(2**rexp_diff)[None, :, None, None]*fact
+            x = x*(rexp_diff.exp2().view(1,-1,1,1))*fact
             self.save_for_backward(x, abs)
             x = x.clamp(-abs, abs)
             x = x.div(delta, rounding_mode="floor").mul(delta)
-            x = x/((2**rexp_diff)[None, :, None, None]*fact)
+            x = x/((rexp_diff.exp2().view(1,-1,1,1))*fact)
             if torch.any(torch.isnan(x)):
                 print("nan in Linquant forward")
             return x
@@ -373,18 +373,18 @@ class LinQuantWeight(Quant):
 
     def forward(self, x:torch.Tensor,rexp_diff, fact_fun=None):
         with torch.no_grad():
-            abs = get_abs(self,x*(2**rexp_diff.view(-1))[None, :, None, None])
-            if torch.any(abs < 1e-6):
-                print("weights to small to quantize")
-                self.delta = (2*(self.abs.type(abs.dtype)/(2.0**self.bits.type(abs.dtype)-1.0))).detach().type(abs.dtype)
-                if fact_fun!=None:
-                    fact = fact_fun(self.delta).view(-1,1,1,1)
-                else:
-                    fact = 1
-                if torch.any(torch.isnan(self.delta)):
-                    print("nan in weights")
-                # print((self.delta).shape)
-                return LinQuant_new_.apply(x, self.abs, self.delta,rexp_diff,fact),fact
+            abs = get_abs(self,x*(2**rexp_diff.view(1,-1,1,1)))
+            # if torch.any(abs < 1e-6):
+            #     print("weights to small to quantize")
+            #     self.delta = (2*(self.abs.type(abs.dtype)/(2.0**self.bits.type(abs.dtype)-1.0))).detach().type(abs.dtype)
+            #     if fact_fun!=None:
+            #         fact = fact_fun(self.delta).view(-1,1,1,1)
+            #     else:
+            #         fact = 1
+            #     if torch.any(torch.isnan(self.delta)):
+            #         print("nan in weights")
+            #     # print((self.delta).shape)
+            #     return LinQuant_new_.apply(x, self.abs, self.delta,rexp_diff,fact),fact
 
                
             self.abs = abs.detach()
@@ -395,8 +395,8 @@ class LinQuantWeight(Quant):
                 fact = fact_fun(self.delta).view(-1,1,1,1)
             else:
                 fact = 1
-            if torch.any(torch.isnan(self.delta)):
-                print("nan in weights")
+            # if torch.any(torch.isnan(self.delta)):
+            #     print("nan in weights")
         # print((self.delta).shape)
         return LinQuant_new_.apply(x, self.abs, self.delta,rexp_diff,fact),fact
 
