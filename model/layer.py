@@ -18,20 +18,26 @@ from .activations import *
 
 class Startfn(torch.autograd.Function):
     @staticmethod
-    def forward(self, x: Tensor, delta, rexp: Tensor, training: bool) -> Tensor:
+    def forward(self, x: Tensor, delta, bits: Tensor, training: bool) -> Tensor:
         with torch.no_grad():
-            x = x.div(delta, rounding_mode="floor")
-            x = x.clamp(-2**(-rexp-1),2**(-rexp-1)-1)
             if training:
-                x = x.div(2**(-rexp))
+                x.div_(delta, rounding_mode="floor").clamp_(-2**(-bits-1),2**(-bits-1)-1).div_(2**(-bits))
             else :
-                x = x.type(torch.int32)
+                x = x.div_(delta, rounding_mode="floor").clamp_(-2**(-bits-1),2**(-bits-1)-1).type(torch.int32)
         return x
 
     @staticmethod
     def backward(self, x: Tensor):
         return x.detach(), None, None, None
 
+
+def Startfn2(x: Tensor, delta_in : Tensor, delta_out : Tensor, bits: Tensor, training: bool, min: Tensor, max: Tensor) -> Tensor:
+    with torch.no_grad():
+            if training:
+                x.data.div_(delta_in, rounding_mode="floor").clamp_(min,max).mul_(delta_out)
+            else :
+                x = x.data.div_(delta_in, rounding_mode="floor").clamp_(min,max).type(torch.int32)
+    return x
 
 class Stopfn(torch.autograd.Function):
     @staticmethod
@@ -102,13 +108,17 @@ class Start(nn.Module):
         super(Start, self).__init__()
         self.register_buffer('run', torch.tensor(
             [-running_exp_init], dtype=torch.float))
-        self.register_buffer("delta", torch.tensor([1.0/(2.0**(-self.run)-1)]))
+        self.register_buffer("delta_in", torch.tensor([1.0/(2.0**(-self.run)-1)]))
+        self.register_buffer("delta_out", torch.tensor([1.0/(2.0**(-self.run))]))
+        self.register_buffer("max", 2**(-self.run-1)-1)
+        self.register_buffer("min", -2**(-self.run-1))
 
     def convert(self):
         return Start_(self.run, self.delta)
 
     def forward(self, x: Tensor):
-        x = Startfn.apply(x, self.delta, self.run, self.training)
+        # x = Startfn.apply(x, self.delta, self.run, self.training)
+        x = Startfn2(x, self.delta_in, self.delta_out, self.run, self.training,self.min,self.max)
         return x, self.run
 
 
