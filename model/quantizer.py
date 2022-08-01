@@ -209,7 +209,7 @@ class Filter_mean(nn.Module):
             return mult*x
 
 class Quant(nn.Module):
-    def __init__(self, size) -> None:
+    def __init__(self, size, rounding_mode: str = "floor", quant_int_dtype = torch.int32  ) -> None:
         super(Quant, self).__init__()
         self.simple = False
         if size == (-1,):
@@ -233,13 +233,16 @@ class Quant(nn.Module):
                 self.permutelist.append(i)
         self.permutelist = tuple(self.permutelist)
 
+        self.rounding_mode = rounding_mode
+        self.quant_int_dtype = quant_int_dtype
+
     def forward(self, x):
         raise NotImplementedError()
 
 
 class LinQuant(Quant):
-    def __init__(self, bits, size=(-1,), mom1=0.1) -> None:
-        super(LinQuant, self).__init__(size)
+    def __init__(self, bits, size=(-1,), mom1=0.1 , rounding_mode: str = "floor", quant_int_dtype = torch.int32 ) -> None:
+        super(LinQuant, self).__init__(size, rounding_mode, quant_int_dtype)
         self.bits = bits
         if size == (-1,):
             self.register_buffer('abs', torch.ones(1))
@@ -248,31 +251,35 @@ class LinQuant(Quant):
         self.take_new = True
         self.mom1 = mom1
         assert(self.bits>0)
-        self.register_buffer("delta_in_factor", torch.tensor(2./(2.0**self.bits)))
-        self.register_buffer("delta_out_factor", torch.tensor(2./(2.0**self.bits-2)))
+        self.register_buffer("delta_in_factor", torch.tensor(2./(2.0**self.bits-1)))
+        self.register_buffer("delta_out_factor", torch.tensor(2./(2.0**self.bits-1)))
 
         self.register_buffer("max", torch.tensor(2**(self.bits-1)-1))
-        self.register_buffer("min", torch.tensor(-(2**(self.bits-1)-1)))
+        self.register_buffer("min", torch.tensor(-(2**(self.bits-1))))
         
 
     def forward(self, x:torch.Tensor):
-        with torch.no_grad():
-            abs = get_abs(self,x)
-            # print(abs)
-            self.abs = ((1-self.mom1)*self.abs + self.mom1*abs).detach()
-            self.delta_in = self.abs.mul(self.delta_in_factor).detach()
-            self.delta_out = self.abs.mul(self.delta_out_factor).detach()
+        if self.training:
+            with torch.no_grad():
+                abs = get_abs(self,x)
+                # print(abs)
+                self.abs = ((1-self.mom1)*self.abs + self.mom1*abs).detach()
+                self.delta_in = self.abs.mul(self.delta_in_factor).detach()
+                self.delta_out = self.abs.mul(self.delta_out_factor).detach()
 
-        return FakeQuant(   x,
-                            self.delta_in,
-                            self.delta_out,
-                            self.training,
-                            self.min,
-                            self.max)
+        return FakeQuant(   x               = x,
+                            delta_in        = self.delta_in,
+                            delta_out       = self.delta_out,
+                            training        = self.training,
+                            min_quant       = self.min,
+                            max_quant       = self.max,
+                            rounding_mode   = self.rounding_mode,
+                            quant_int_dtype = self.quant_int_dtype
+                            )
 
 class LinQuantExpScale(Quant):
-    def __init__(self, bits, size=(-1,), mom1=0.1) -> None:
-        super(LinQuantExpScale, self).__init__(size)
+    def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor", quant_int_dtype = torch.int32 ) -> None:
+        super(LinQuantExpScale, self).__init__(size, rounding_mode, quant_int_dtype)
         self.bits = bits
         if size == (-1,):
             self.register_buffer('abs', torch.ones(1))
@@ -281,30 +288,33 @@ class LinQuantExpScale(Quant):
         self.take_new = True
         self.mom1 = mom1
         assert(self.bits>0)
-        self.register_buffer("delta_in_factor", torch.tensor(2./(2.0**self.bits)))
-        self.register_buffer("delta_out_factor", torch.tensor(2./(2.0**self.bits-2)))
+        self.register_buffer("delta_in_factor", torch.tensor(2./(2.0**self.bits-1)))
+        self.register_buffer("delta_out_factor", torch.tensor(2./(2.0**self.bits-1)))
 
         self.register_buffer("max", torch.tensor(2**(self.bits-1)-1))
-        self.register_buffer("min", torch.tensor(-(2**(self.bits-1)-1)))
-        
+        self.register_buffer("min", torch.tensor(-(2**(self.bits-1))))
 
     def forward(self, x:torch.Tensor):
-        with torch.no_grad():
-            abs = get_abs(self,x)
-            # print(abs)
-            self.abs = ((1-self.mom1)*self.abs + self.mom1*abs).detach()
+        if self.training:
+            with torch.no_grad():
+                abs = get_abs(self,x)
+                # print(abs)
+                self.abs = ((1-self.mom1)*self.abs + self.mom1*abs).detach()
 
-            abs = self.abs.log2().ceil().exp2()
+                abs = self.abs.log2().ceil().exp2()
 
-            self.delta_in = abs.mul(self.delta_in_factor).detach()
-            self.delta_out = abs.mul(self.delta_out_factor).detach()
+                self.delta_in = abs.mul(self.delta_in_factor).detach()
+                self.delta_out = abs.mul(self.delta_out_factor).detach()
 
-        return FakeQuant(   x,
-                            self.delta_in,
-                            self.delta_out,
-                            self.training,
-                            self.min,
-                            self.max)
+        return FakeQuant(   x               = x,
+                            delta_in        = self.delta_in,
+                            delta_out       = self.delta_out,
+                            training        = self.training,
+                            min_quant       = self.min,
+                            max_quant       = self.max,
+                            rounding_mode   = self.rounding_mode,
+                            quant_int_dtype = self.quant_int_dtype
+                            )
 
 
 #########################################################################################################################
@@ -319,12 +329,12 @@ class LinQuantExpScale(Quant):
 #     def backward(self,grad):
 #         return grad , None
 
-def FakeQuant(x: Tensor, delta_in : Tensor, delta_out : Tensor, training: bool, min_quant: Tensor, max_quant: Tensor) -> Tensor:
+def FakeQuant(x: Tensor, delta_in : Tensor, delta_out : Tensor, training: bool, min_quant: Tensor, max_quant: Tensor, rounding_mode: str = "floor", quant_int_dtype = torch.int32) -> Tensor:
     with torch.no_grad():
         if training:
-            x.data.div_(delta_in, rounding_mode="trunc").clamp_(min_quant,max_quant).mul_(delta_out)
+            x.data.div_(delta_in, rounding_mode=rounding_mode).clamp_(min_quant,max_quant).mul_(delta_out)
         else :
-            x = x.data.div(delta_in, rounding_mode="trunc").clamp_(min_quant,max_quant).type(torch.int32)
+            x = x.data.div(delta_in, rounding_mode=rounding_mode).clamp_(min_quant,max_quant).type(quant_int_dtype)
     return x
 
 
