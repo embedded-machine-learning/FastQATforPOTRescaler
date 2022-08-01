@@ -25,19 +25,19 @@ class LinQuantWeight(Quant):
         self.register_buffer("min", torch.tensor(-(2**(self.bits-1)-1)))
         
 
-    def forward(self, x:torch.Tensor,rexp_diff, fact_fun):
+    def forward(self, x:torch.Tensor,orexp, rexp_diff, fact_fun):
         with torch.no_grad():
-            abs = get_abs(self,x*(rexp_diff.exp2().view(1,-1,1,1)))
+            abs = get_abs(self,x*(rexp_diff.view(1,-1,1,1)))
                
             self.abs = abs.detach()
             self.delta_in = self.abs.mul(self.delta_in_factor).detach()
             self.delta_out = self.abs.mul(self.delta_out_factor).detach()
             
-            fact = fact_fun(self.delta_out).view(-1,1,1,1)
+            fact = fact_fun(self.delta_out*orexp).view(-1,1,1,1)
 
         return FakeQuant(   x               = x.clone(),
-                            delta_in        = self.delta_in/((rexp_diff.exp2().view(1,-1,1,1)*fact)),
-                            delta_out       = self.delta_out/((rexp_diff.exp2().view(1,-1,1,1)*fact)),
+                            delta_in        = self.delta_in/((rexp_diff.view(1,-1,1,1)*fact)),
+                            delta_out       = self.delta_out/((rexp_diff.view(1,-1,1,1)*fact)),
                             training        = self.training,
                             min_quant       = self.min,
                             max_quant       = self.max,
@@ -99,11 +99,11 @@ class Conv2dQuant_new(nn.Conv2d):
         self.debug_n = []       
 
 
-    def get_weight_factor(self,delta_I,delta_O):
-        def fun(delta_W):
+    def get_weight_factor(self,delta_O):
+        def fun(rexp):
             with torch.no_grad():
                 # print(delta_I,delta_O,delta_W)
-                n = delta_W.view(-1)*delta_I.view(-1)/delta_O.view(-1)
+                n = rexp.view(-1)/delta_O.view(-1)
                 n = torch.log2(n)
                 nr = torch.ceil(n)
                 return torch.exp2(n-nr)
@@ -123,15 +123,22 @@ class Conv2dQuant_new(nn.Conv2d):
         orexp = (torch.mean(rexp)).squeeze()
         rexp_diff = rexp.squeeze() - orexp.unsqueeze(-1)
 
-        print("orexp", orexp)
-        print("rexp_diff", rexp_diff.view(-1))
+        # print("orexp", orexp)
+        # print("rexp_diff", rexp_diff.view(-1))
 
         weight = self.weight
 
         if factor_fun==None:
-            weight,fact = self.quantw(weight.type(self.quant_float_dtype),rexp_diff.type(self.quant_float_dtype),self.get_weight_factor(orexp.detach().view(-1).exp2(),self.out_quant.delta_in.view(-1).detach()))
+            weight,fact = self.quantw(  weight.type(self.quant_float_dtype),
+                                        orexp.type(self.quant_float_dtype).exp2(),
+                                        rexp_diff.type(self.quant_float_dtype).exp2(),
+                                        self.get_weight_factor(self.out_quant.delta_in.view(-1).detach())
+                                    )
         else:
-            weight,fact = self.quantw(weight.type(self.quant_float_dtype),rexp_diff.type(self.quant_float_dtype),factor_fun)
+            weight,fact = self.quantw(  weight.type(self.quant_float_dtype),
+                                        orexp.type(self.quant_float_dtype).exp2(),
+                                        rexp_diff.type(self.quant_float_dtype).exp2(),
+                                        factor_fun)
         # weight = self.weight
 
         weight = weight.type(self.weight.dtype)
@@ -173,14 +180,10 @@ class Conv2dQuant_new(nn.Conv2d):
         if self.training:
             out = self._conv_forward(input, weight, bias)
         else:
-            # if self.bias == None: 
-                out = self._conv_forward(input.type(self.quant_float_dtype), weight.type(self.quant_float_dtype), None).type(self.quant_int_dtype)
-            # else:   
-            #     out = self._conv_forward(input.type(self.quant_float_dtype), weight.type(self.quant_float_dtype), bias.type(self.quant_float_dtype)).type(self.quant_int_dtype)
-        # if torch.any(torch.isnan(out-out.round())):
-        #     print("WTF")
-        # if not self.training and (out-out.round()).abs().max()!=0:
-        #     print("post convolution not whole number",(out-out.round()).mean())
+
+            out = self._conv_forward(input.type(self.quant_float_dtype), weight.type(self.quant_float_dtype), None).type(self.quant_int_dtype)
+  
+        
         if factor_fun == None:
             if self.training:
                 out2 = self.out_quant(out)
@@ -193,4 +196,4 @@ class Conv2dQuant_new(nn.Conv2d):
                     out2 = out.mul(torch.exp2(self.n)).clamp_(self.out_quant.min,self.out_quant.max).floor_()
             return out2, torch.log2(self.out_quant.delta_out.detach())
         else:
-            return out, orexp
+            return out, orexp+self.quantw.delta_out.log2()

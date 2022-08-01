@@ -118,7 +118,7 @@ class Start(nn.Module):
 
     def forward(self, x: Tensor):
         # x = Startfn.apply(x, self.delta, self.run, self.training)
-        x = Startfn2(x, self.delta_in, self.delta_out, self.run, self.training,self.min,self.max)
+        x = Startfn2(x.clone(), self.delta_in, self.delta_out, self.run, self.training,self.min,self.max)
         return x, self.run
 
 
@@ -140,30 +140,30 @@ class Stop(nn.Module):
         return x
 
 
-class Bias(nn.Module):
-    def __init__(self, num_features, device=None, dtype=None):
-        factory_kwargs = {'device': device, 'dtype': dtype}
-        super(Bias, self).__init__()
-        self.bias = torch.nn.Parameter(
-            torch.empty(num_features, **factory_kwargs))
-        torch.nn.init.zeros_(self.bias)
-        self.register_buffer('t', torch.zeros(num_features))
-        raise NotImplementedError("Needs to be updated")
+# class Bias(nn.Module):
+#     def __init__(self, num_features, device=None, dtype=None):
+#         factory_kwargs = {'device': device, 'dtype': dtype}
+#         super(Bias, self).__init__()
+#         self.bias = torch.nn.Parameter(
+#             torch.empty(num_features, **factory_kwargs))
+#         torch.nn.init.zeros_(self.bias)
+#         self.register_buffer('t', torch.zeros(num_features))
+#         raise NotImplementedError("Needs to be updated")
 
-    def forward(self, inputs):
-        x, rexp = inputs
-        self.t = Round.apply(self.bias[None, :, None, None]*(2**(-rexp)))
-        # self.t = self.t.clamp(-128,127)
-        if self.training:
-            x = x*(2**(-rexp))
-            x = x + self.t
-            # x = x.clamp(-128,127)
-            x = x/(2**(-rexp))
-        else:
-            x = x + self.t
-            # x = x.clamp(-128,127)
+#     def forward(self, inputs):
+#         x, rexp = inputs
+#         self.t = Round.apply(self.bias[None, :, None, None]*(2**(-rexp)))
+#         # self.t = self.t.clamp(-128,127)
+#         if self.training:
+#             x = x*(2**(-rexp))
+#             x = x + self.t
+#             # x = x.clamp(-128,127)
+#             x = x/(2**(-rexp))
+#         else:
+#             x = x + self.t
+#             # x = x.clamp(-128,127)
 
-        return x, rexp
+#         return x, rexp
 
 
 class BlockQuantN(nn.Module):
@@ -184,7 +184,7 @@ class BlockQuantN(nn.Module):
         fact = self.bn.get_weight_factor()
 
         x = self.conv(invals, fact)
-        x = self.bn(x, self.conv.quantw.delta)
+        x = self.bn(x)
         x = self.activation(x)
 
         return x

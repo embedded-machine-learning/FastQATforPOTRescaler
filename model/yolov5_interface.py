@@ -1,7 +1,7 @@
 from .convolution   import Conv2dQuant_new
 from .batchnorm     import BatchNorm2dBase_new
 from .activations   import LeakReLU
-from .layer         import MaxPool,AddQAT
+from .layer         import MaxPool2d,AddQAT
 
 import torch.nn as nn
 from torch.nn.common_types import _size_any_t,_ratio_any_t,Optional
@@ -29,7 +29,7 @@ class ConvQAT(nn.Module):
         # print(x[0].shape)
         x = self.conv(x, fact)
         # print(x[0].shape)
-        x = self.bn(x, self.conv.quantw.delta.detach())
+        x = self.bn(x)
         # print(x[0].shape)
         x = self.act(x)
         # print(x[0].shape)
@@ -97,7 +97,7 @@ class SPPFQAT(nn.Module):
         c_ = c1 // 2  # hidden channels
         self.cv1 = ConvQAT(c1, c_, 1, 1)
         self.cv2 = ConvQAT(c_ * 4, c2, 1, 1)
-        self.m = MaxPool(kernel_size=k, stride=1, padding=k // 2)
+        self.m = MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
         self.cat = ConcatQAT(1)
 
     def forward(self, x):
