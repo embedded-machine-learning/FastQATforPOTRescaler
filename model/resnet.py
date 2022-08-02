@@ -8,7 +8,7 @@ from torchvision.models._api    import WeightsEnum
 from torchvision.models._utils  import _ovewrite_named_param
 
 from .convolution   import Conv2dQuant
-from .batchnorm     import BatchNorm2dBase_new
+from .batchnorm     import BatchNorm2dBase
 from .activations   import ReLU
 from .layer         import AddQAT, MaxPool2d, Start, Stop, AdaptiveAvgPool2d, Flatten
 from .Linear        import Linear
@@ -60,12 +60,12 @@ class Downsample_Block(nn.Module):
         self.stride     = stride
 
         self.conv   = conv1x1(inplanes,planes*expansion,stride)
-        self.bn     = BatchNorm2dBase_new(planes * expansion)
+        self.bn     = BatchNorm2dBase(planes * expansion)
 
     def forward(self,x):
         fact1 = self.bn.get_weight_factor()
         x = self.conv(x,fact1)
-        x = self.bn(x,self.conv.weight_quant.delta.detach())
+        x = self.bn(x)
         return x
 
 
@@ -85,7 +85,7 @@ class BasicBlock(nn.Module):
     ) -> None:
         super().__init__()
         if norm_layer is None:
-            norm_layer = BatchNorm2dBase_new
+            norm_layer = BatchNorm2dBase
         if groups != 1 or base_width != 64:
             raise ValueError("BasicBlock only supports groups=1 and base_width=64")
         if dilation > 1:
@@ -104,11 +104,11 @@ class BasicBlock(nn.Module):
         identity = x
         fact1 = self.bn1.get_weight_factor()
         out = self.conv1(x,fact1)
-        out = self.bn1(out,self.conv1.weight_quant.delta.detach())
+        out = self.bn1(out)
         out = self.relu(out)
         fact2 = self.bn2.get_weight_factor()
         out = self.conv2(out,fact2)
-        out = self.bn2(out,self.conv2.weight_quant.delta.detach())
+        out = self.bn2(out)
         if self.downsample is not None:
             identity = self.downsample(x)
 
@@ -139,7 +139,7 @@ class Bottleneck(nn.Module):
     ) -> None:
         super().__init__()
         if norm_layer is None:
-            norm_layer = BatchNorm2dBase_new
+            norm_layer = BatchNorm2dBase
         width = int(planes * (base_width / 64.0)) * groups
         # Both self.conv2 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv1x1(inplanes, width)
@@ -158,19 +158,19 @@ class Bottleneck(nn.Module):
 
         fact1 = self.bn1.get_weight_factor()
         out = self.conv1(x,fact1)
-        out = self.bn1(out,self.conv1.weight_quant.delta.detach())
+        out = self.bn1(out)
         out = self.relu(out)
 
 
         fact2 = self.bn2.get_weight_factor()
         out = self.conv2(out,fact2)
-        out = self.bn2(out,self.conv2.weight_quant.delta.detach())
+        out = self.bn2(out)
         out = self.relu(out)
 
 
         fact3 = self.bn3.get_weight_factor()
         out = self.conv3(out,fact3)
-        out = self.bn3(out,self.conv3.weight_quant.delta.detach())
+        out = self.bn3(out)
 
         if self.downsample is not None:
             identity = self.downsample(x)
@@ -196,7 +196,7 @@ class ResNet(nn.Module):
         super().__init__()
         _log_api_usage_once(self)
         if norm_layer is None:
-            norm_layer = BatchNorm2dBase_new
+            norm_layer = BatchNorm2dBase
         self._norm_layer = norm_layer
 
         self.inplanes = 64
@@ -290,7 +290,7 @@ class ResNet(nn.Module):
         
         fact1 = self.bn1.get_weight_factor()
         x = self.conv1(x,fact1)
-        x = self.bn1(x,self.conv1.weight_quant.delta.detach())
+        x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
         x = self.layer1(x)
