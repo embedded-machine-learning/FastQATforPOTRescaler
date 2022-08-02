@@ -79,7 +79,7 @@ class LinQuantWeight(Quant):
 
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> tuple[Tensor, Tensor]:
         """
-        forward Does the quantization, if :cvar:`self.training`
+        forward Does the quantization, if :cvar:`self.training` returns floats else ints
 
         Calculates the quantization factors and a scaling factor defined by the passed function.
 
@@ -203,7 +203,7 @@ class Conv2dQuant(nn.Conv2d):
         quant_float_dtype: torch.dtype = torch.float32,
     ) -> None:
         LOG(
-            __LOG_LEVEL_HIGH_DETAIL__,
+            __LOG_LEVEL_DEBUG__,
             f"Conv2dQuant passed arguments:\n\
             in_channels:                    {in_channels}\n\
             out_channels:                   {out_channels}\n\
@@ -267,7 +267,7 @@ class Conv2dQuant(nn.Conv2d):
             out_quant_args = (
                 out_quant_bits,
                 (-1,) if not out_quant_channel_wise else (1, out_channels, 1, 1),
-                1,
+                0.1,
                 "floor",
             )
         LOG(__LOG_LEVEL_DEBUG__,f"Conv2dQuant.__init__: out_quant_args",out_quant_args)
@@ -350,8 +350,6 @@ class Conv2dQuant(nn.Conv2d):
 
         **IMPORTANT** Acts as an independent class if no function is passed to the forward method (if independent it quantizes the output by shifting)
 
-
-
         :param invals: The values of the previous layer
         :type invals: Tuple[torch.Tensor, torch.Tensor]
         :param factor_fun: A function for additional weight scaling , defaults to None
@@ -404,8 +402,6 @@ class Conv2dQuant(nn.Conv2d):
                 rounding_mode=self.out_quant.rounding_mode,
                 quant_int_dtype=self.out_quant.quant_int_dtype,
             )
-            # print(bias.view(-1),self.bias.view(-1))
-            # bias = self.bias.clone()
         LOG(__LOG_LEVEL_DEBUG__,"Conv2dQuant.forward bias",bias)
 
         if __DEBUG__:
@@ -418,8 +414,6 @@ class Conv2dQuant(nn.Conv2d):
                 self.t = bias.detach().view(1, -1, 1, 1)
             else:
                 self.t = None
-            # print(weight)
-            # only nessesary as /delta can have a slight relative error ~1e-6 in calculations
             LOG(__LOG_LEVEL_DEBUG__,"Conv2dQuant.forward self.t",self.t)
 
             self.quant_weight = weight.detach()
@@ -437,7 +431,6 @@ class Conv2dQuant(nn.Conv2d):
         if self.training:
             out = self._conv_forward(input, weight, bias)
         else:
-
             out = self._conv_forward(
                 input.type(self.quant_float_dtype),
                 weight.type(self.quant_float_dtype),
@@ -449,9 +442,7 @@ class Conv2dQuant(nn.Conv2d):
         if factor_fun == None:
             if self.training:
                 out2 = self.out_quant(out)
-                # print(torch.log2(self.out_quant.delta_out.detach()).view(-1))
             else:
-                # print(self.n.shape)
                 if bias != None:
                     out2 = (
                         out.mul(torch.exp2(self.n)).add_(self.t).clamp_(self.out_quant.min, self.out_quant.max).floor_()
