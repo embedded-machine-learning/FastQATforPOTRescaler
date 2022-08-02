@@ -450,6 +450,6 @@ class Conv2dQuant(nn.Conv2d):
                 else:
                     out2 = out.mul(torch.exp2(self.n)).clamp_(self.out_quant.min, self.out_quant.max).floor_()
             LOG(__LOG_LEVEL_DEBUG__,"Conv2dQuant.forward out2",out2)
-            return out2, torch.log2(self.out_quant.delta_out.detach())
+            return out2, torch.log2(self.out_quant.delta_out.detach()).view(1,-1,1,1)
         else:
-            return out, rexp_mean + self.weight_quant.delta_out.log2()
+            return out, rexp_mean + self.weight_quant.delta_out.log2().view(1,-1,1,1)
