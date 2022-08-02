@@ -7,7 +7,7 @@ from torchvision.utils          import _log_api_usage_once
 from torchvision.models._api    import WeightsEnum
 from torchvision.models._utils  import _ovewrite_named_param
 
-from .convolution   import Conv2dQuant_new
+from .convolution   import Conv2dQuant
 from .batchnorm     import BatchNorm2dBase_new
 from .activations   import ReLU
 from .layer         import AddQAT, MaxPool2d, Start, Stop, AdaptiveAvgPool2d, Flatten
@@ -19,9 +19,9 @@ from .Linear        import Linear
 
 
 
-def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> Conv2dQuant_new:
+def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> Conv2dQuant:
     """3x3 convolution with padding"""
-    return Conv2dQuant_new(
+    return Conv2dQuant(
         in_planes,
         out_planes,
         kernel_size=3,
@@ -37,9 +37,9 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
     )
 
 
-def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> Conv2dQuant_new:
+def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> Conv2dQuant:
     """1x1 convolution"""
-    return Conv2dQuant_new(
+    return Conv2dQuant(
         in_planes, 
         out_planes, 
         kernel_size=1, 
@@ -65,7 +65,7 @@ class Downsample_Block(nn.Module):
     def forward(self,x):
         fact1 = self.bn.get_weight_factor()
         x = self.conv(x,fact1)
-        x = self.bn(x,self.conv.quantw.delta.detach())
+        x = self.bn(x,self.conv.weight_quant.delta.detach())
         return x
 
 
@@ -104,11 +104,11 @@ class BasicBlock(nn.Module):
         identity = x
         fact1 = self.bn1.get_weight_factor()
         out = self.conv1(x,fact1)
-        out = self.bn1(out,self.conv1.quantw.delta.detach())
+        out = self.bn1(out,self.conv1.weight_quant.delta.detach())
         out = self.relu(out)
         fact2 = self.bn2.get_weight_factor()
         out = self.conv2(out,fact2)
-        out = self.bn2(out,self.conv2.quantw.delta.detach())
+        out = self.bn2(out,self.conv2.weight_quant.delta.detach())
         if self.downsample is not None:
             identity = self.downsample(x)
 
@@ -158,19 +158,19 @@ class Bottleneck(nn.Module):
 
         fact1 = self.bn1.get_weight_factor()
         out = self.conv1(x,fact1)
-        out = self.bn1(out,self.conv1.quantw.delta.detach())
+        out = self.bn1(out,self.conv1.weight_quant.delta.detach())
         out = self.relu(out)
 
 
         fact2 = self.bn2.get_weight_factor()
         out = self.conv2(out,fact2)
-        out = self.bn2(out,self.conv2.quantw.delta.detach())
+        out = self.bn2(out,self.conv2.weight_quant.delta.detach())
         out = self.relu(out)
 
 
         fact3 = self.bn3.get_weight_factor()
         out = self.conv3(out,fact3)
-        out = self.bn3(out,self.conv3.quantw.delta.detach())
+        out = self.bn3(out,self.conv3.weight_quant.delta.detach())
 
         if self.downsample is not None:
             identity = self.downsample(x)
@@ -212,7 +212,7 @@ class ResNet(nn.Module):
             )
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = Conv2dQuant_new(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False,weight_quant_bits=8,weight_quant_channel_wise=True)
+        self.conv1 = Conv2dQuant(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False,weight_quant_bits=8,weight_quant_channel_wise=True)
         self.bn1 = norm_layer(self.inplanes)
         self.relu = ReLU(inplace=False)
         self.maxpool = MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -290,7 +290,7 @@ class ResNet(nn.Module):
         
         fact1 = self.bn1.get_weight_factor()
         x = self.conv1(x,fact1)
-        x = self.bn1(x,self.conv1.quantw.delta.detach())
+        x = self.bn1(x,self.conv1.weight_quant.delta.detach())
         x = self.relu(x)
         x = self.maxpool(x)
         x = self.layer1(x)
