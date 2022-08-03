@@ -149,6 +149,7 @@ class Linear(nn.Linear):
     :type weight_quant_args: _type_, optional
     :param weight_quant_kargs: Passes named arguments to the initializer of the weight quantization class, defaults to {}
     :type weight_quant_kargs: dict, optional
+    
     :param out_quant: A callable object which overrides the default output quantization, gets called with (values) , defaults to None
     :type out_quant: _type_, optional
     :param out_quant_bits: Number of bits, defaults to 8
@@ -159,6 +160,7 @@ class Linear(nn.Linear):
     :type out_quant_args: _type_, optional
     :param out_quant_kargs: Passes named arguments to the initializer of the out quantization class, defaults to {}
     :type out_quant_kargs: dict, optional
+    
     :param quant_int_dtype: The desired integer type, defaults to torch.int32
     :type quant_int_dtype: torch.dtype, optional
     :param quant_float_dtype: The desired floating-point type, defaults to torch.float32
@@ -214,14 +216,15 @@ class Linear(nn.Linear):
                 weight_quant_bits,
                 (-1,) if not weight_quant_channel_wise else (out_features, 1),
                 "trunc",
+                quant_int_dtype,
             )
-        LOG(__LOG_LEVEL_DEBUG__, "Linear.__init__: weight_quant_args", weight_quant_args)
+        LOG(__LOG_LEVEL_TO_MUCH__, "Linear.__init__: weight_quant_args", weight_quant_args)
 
         if weight_quant == None:
             self.weight_quant = LinQuantWeight(*weight_quant_args, **weight_quant_kargs)
         else:
             self.weight_quant = weight_quant
-        LOG(__LOG_LEVEL_DEBUG__, "Linear.__init__: self.weight_quant", self.weight_quant)
+        LOG(__LOG_LEVEL_TO_MUCH__, "Linear.__init__: self.weight_quant", self.weight_quant)
 
         # only used if factor_fun in forward is None
         if out_quant_args == None:
@@ -230,14 +233,15 @@ class Linear(nn.Linear):
                 (-1,) if not out_quant_channel_wise else (1, out_features),
                 0.1,
                 "floor",
+                quant_int_dtype,
             )
-        LOG(__LOG_LEVEL_DEBUG__, "Linear.__init__: out_quant_args", out_quant_args)
+        LOG(__LOG_LEVEL_TO_MUCH__, "Linear.__init__: out_quant_args", out_quant_args)
 
         if out_quant == None:
             self.out_quant = LinQuantExpScale(*out_quant_args, **out_quant_kargs)
         else:
             self.out_quant = out_quant
-        LOG(__LOG_LEVEL_DEBUG__, "Linear.__init__: self.out_quant", self.out_quant)
+        LOG(__LOG_LEVEL_TO_MUCH__, "Linear.__init__: self.out_quant", self.out_quant)
 
         self.register_buffer("quant_weight", torch.zeros_like(self.weight))
         LOG(__LOG_LEVEL_TO_MUCH__, f"Linear.__init__: buffer quant_weight", self.quant_weight)
@@ -347,7 +351,7 @@ class Linear(nn.Linear):
             bias = None
         else:
             bias = FakeQuant(
-                x=self.bias.clone().view(1,-1),
+                x=self.bias.clone().view(1, -1),
                 delta_in=self.out_quant.delta_in,
                 delta_out=self.out_quant.delta_out,
                 training=self.training,
@@ -373,10 +377,6 @@ class Linear(nn.Linear):
             ).view(1, -1)
             LOG(__LOG_LEVEL_DEBUG__, "Linear.forward self.n", self.n)
 
-        # if torch.any(torch.isnan(weight)):
-        #     print(torch.max(torch.abs(self.weight.view(-1))))
-
-        # input = checkNan.apply( input, "Linear input")
         if self.training:
             out = F.linear(input, weight, bias)
         else:
@@ -398,6 +398,6 @@ class Linear(nn.Linear):
                 else:
                     out2 = out.mul(torch.exp2(self.n)).clamp_(self.out_quant.min, self.out_quant.max).floor_()
             LOG(__LOG_LEVEL_DEBUG__, "Linear.forward out2", out2)
-            return out2, torch.log2(self.out_quant.delta_out.detach()).view(1,-1)
+            return out2, torch.log2(self.out_quant.delta_out.detach())
         else:
-            return out, rexp_mean + self.weight_quant.delta_out.log2().view(1,-1)
+            return out, rexp_mean + self.weight_quant.delta_out.log2().view(1, -1)

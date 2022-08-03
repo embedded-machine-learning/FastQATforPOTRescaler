@@ -161,7 +161,7 @@ def calculate_alpha(
         LOG(__LOG_LEVEL_DEBUG__, "calculate_alpha: n", n)
         nr = torch.ceil(n)
         LOG(__LOG_LEVEL_DEBUG__, "calculate_alpha: nr", nr)
-        alpha = torch.sign(weight)*torch.exp2(n - nr)
+        alpha = torch.sign(weight) * torch.exp2(n - nr)
         LOG(__LOG_LEVEL_DEBUG__, "calculate_alpha: alpha", alpha)
     return alpha
 
@@ -196,13 +196,13 @@ def calculate_alpha_fixed(
         LOG(__LOG_LEVEL_DEBUG__, "calculate_alpha_fixed: nr", nr)
         nr = torch.ceil(nr)
         LOG(__LOG_LEVEL_DEBUG__, "calculate_alpha_fixed: nr post ceil", nr)
-        alpha = torch.sign(weight)*torch.exp2(n - nr)
+        alpha = torch.sign(weight) * torch.exp2(n - nr)
         LOG(__LOG_LEVEL_DEBUG__, "calculate_alpha_fixed: alpha", alpha)
     raise NotImplementedError()
     return alpha
 
 
-class BatchNorm2dBase(torch.nn.BatchNorm2d):
+class BatchNorm2d(torch.nn.BatchNorm2d):
     """
     BatchNorm2dBase Modified nn.BatchNorm2d
 
@@ -218,13 +218,25 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
     :type affine: bool, optional
     :param track_running_stats: BN running stats, defaults to True
     :type track_running_stats: bool, optional
-    
-    :param outQuantBits: Number of bits for the output quantization, defaults to 8
-    :type outQuantBits: int, optional
-    :param outQuantDyn: Channel-wise output quantization, defaults to False
-    :type outQuantDyn: bool, optional
+
     :param fixed_n: Set the shift to a layer-wise value rather than channel-wise, defaults to False
     :type fixed_n: bool, optional
+    
+    :param out_quant:  A callable object which overrides the default output quantization, gets called with (values) , defaults to None
+    :type out_quant: _type_, optional
+    :param out_quant_bits: Number of bits for the output quantization, defaults to 8
+    :type out_quant_bits: int, optional
+    :param out_quant_channel_wise: Channel-wise output quantization, defaults to False
+    :type out_quant_channel_wise: bool, optional
+    :param out_quant_args:  Overrides arguments for the out quantization initializer with custom ones, defaults to None
+    :type out_quant_args: _type_, optional
+    :param out_quant_kargs: Passes named arguments to the initializer of the out quantization class, defaults to {}
+    :type out_quant_kargs: dict, optional
+
+    :param quant_int_dtype: The desired integer type, defaults to torch.int32
+    :type quant_int_dtype: torch.dtype, optional
+    :param quant_float_dtype: The desired floating-point type, defaults to torch.float32
+    :type quant_float_dtype: torch.dtype, optional
     """
 
     def __init__(
@@ -236,36 +248,49 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
         track_running_stats: bool = True,
         device=None,
         dtype=None,
-        outQuantBits: int = 8,
-        outQuantDyn: bool = False,
         fixed_n: bool = False,
+        out_quant=None,
+        out_quant_bits: int = 8,
+        out_quant_channel_wise: bool = False,
+        out_quant_args=None,
+        out_quant_kargs={},
+        quant_int_dtype: torch.dtype = torch.int32,
+        quant_float_dtype: torch.dtype = torch.float32,
     ):
+    
         """
         Please read the class help
         """
-        LOG(__LOG_LEVEL_DEBUG__, f"BatchNorm2dBase passed arguments:\n\
-        num_features:                {num_features}\n\
-        eps:                         {eps}\n\
-        momentum:                    {momentum}\n\
-        affine:                      {affine}\n\
-        track_running_stats:         {track_running_stats}\n\
-        device:                      {device}\n\
-        dtype:                       {dtype}\n\
-        outQuantBits:                {outQuantBits}\n\
-        outQuantDyn:                 {outQuantDyn}\n\
-        fixed_n:                     {fixed_n}\n\
-        ")
-        
-        super(BatchNorm2dBase, self).__init__(num_features, eps, momentum, affine, track_running_stats, device, dtype)
+        LOG(
+            __LOG_LEVEL_DEBUG__,
+            f"BatchNorm2dBase passed arguments:\n\
+            num_features:                   {num_features}\n\
+            eps:                            {eps}\n\
+            momentum:                       {momentum}\n\
+            affine:                         {affine}\n\
+            track_running_stats:            {track_running_stats}\n\
+            device:                         {device}\n\
+            dtype:                          {dtype}\n\
+            fixed_n:                        {fixed_n}\n\
+            out_quant:                      {out_quant}\n\
+            out_quant_bits:                 {out_quant_bits}\n\
+            out_quant_channel_wise:         {out_quant_channel_wise}\n\
+            out_quant_args:                 {out_quant_args}\n\
+            out_quant_kargs:                {out_quant_kargs}\n\
+            quant_int_dtype:                {quant_int_dtype}\n\
+            quant_float_dtype:              {quant_float_dtype}\n\
+            ",
+        )
+
+        super(BatchNorm2d, self).__init__(num_features, eps, momentum, affine, track_running_stats, device, dtype)
 
         self.register_buffer("n", torch.zeros(num_features))
-        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase: buffer n", self.n)
+        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.__init__: buffer n", self.n)
         self.register_buffer("t", torch.zeros(num_features))
-        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase: buffer t", self.t)
+        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.__init__: buffer t", self.t)
         self.register_buffer("alpha", 1.0 / np.sqrt(2.0) * torch.ones(num_features))
-        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase: buffer alpha", self.alpha)
+        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.__init__: buffer alpha", self.alpha)
 
-        
         self.func_t = calculate_t
         self.fixed_n = fixed_n
         if fixed_n:
@@ -274,23 +299,39 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
         else:
             self.func_n = calculate_n
             self.func_a = calculate_alpha
-        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase: self.func_n", self.func_n)
-        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase: self.func_a", self.func_a)
-        
+        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.__init__: self.func_n", self.func_n)
+        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.__init__: self.func_a", self.func_a)
 
-        self.out_quant = LinQuantExpScale(outQuantBits, (1, num_features, 1, 1) if outQuantDyn else (-1,), 1, "floor")
-        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase: self.out_quant", self.out_quant)
-        
+        if out_quant_args == None:
+            out_quant_args = (
+                out_quant_bits,
+                (-1,) if not out_quant_channel_wise else (1, num_features),
+                0.1,
+                "floor",
+                quant_int_dtype,
+            )
+        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.__init__: out_quant_args", out_quant_args)
+
+        if out_quant == None:
+            self.out_quant = LinQuantExpScale(*out_quant_args, **out_quant_kargs)
+        else:
+            self.out_quant = out_quant
+        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.__init__: self.out_quant", self.out_quant)
 
         self.register_buffer("weight_sign", torch.ones(num_features))
-        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase: buffer weight_sign", self.weight_sign)
-        self.outQuantBits = outQuantBits
+        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.__init__: buffer weight_sign", self.weight_sign)
+
+        self.quant_int_dtype = quant_int_dtype
+        LOG(__LOG_LEVEL_TO_MUCH__, f"BatchNorm2dBase.__init__: self.quant_int_dtype", self.quant_int_dtype)
+        self.quant_float_dtype = quant_float_dtype
+        LOG(__LOG_LEVEL_TO_MUCH__, f"BatchNorm2dBase.__init__: self.quant_float_dtype", self.quant_float_dtype)
 
 
     def get_weight_factor(self):
         """
         get_weight_factor Returns a function to calculate alpha with a singe value
         """
+
         def ret_fun(rexp):
             self.alpha = self.func_a(
                 weight=self.weight.view(-1).detach(),
@@ -306,18 +347,18 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         x, rexp = input
-        LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: x",x)
-        LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: rexp",rexp)
+        LOG(__LOG_LEVEL_DEBUG__, "BatchNorm2dBase.forward: x", x)
+        LOG(__LOG_LEVEL_DEBUG__, "BatchNorm2dBase.forward: rexp", rexp)
 
         if self.training:
-            if x.dtype == torch.int32:
-                x = super().forward(x.type(self.weight.dtype))
+            if x.dtype == self.quant_int_dtype :
+                x = super().forward(x.type(self.quant_float_dtype))
             else:
                 x = super().forward(x)
-            LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: x post super().forward",x)
+            LOG(__LOG_LEVEL_DEBUG__, "BatchNorm2dBase.forward: x post super().forward", x)
 
             x = self.out_quant(x)
-            LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: x post quant",x)
+            LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.forward: x post quant", x)
             return x, rexp
 
         else:
@@ -330,7 +371,7 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
                     out_quant=self.out_quant.delta_in.view(-1),
                     rexp=rexp.view(-1),
                 ).detach()
-                LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: self.n",self.n)
+                LOG(__LOG_LEVEL_DEBUG__, "BatchNorm2dBase.forward: self.n", self.n)
 
                 t = self.func_t(
                     weight=self.weight.view(-1),
@@ -341,24 +382,27 @@ class BatchNorm2dBase(torch.nn.BatchNorm2d):
                     rexp=rexp.view(-1),
                     n=self.n.view(-1),
                 ).detach()
-                LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: t",t)
+                LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.forward: t", t)
 
-                tmp = torch.exp2(self.n.type(torch.float32))
-                LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: tmp",tmp)
+                tmp = torch.exp2(self.n.type(self.quant_float_dtype))
+                LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.forward: tmp", tmp)
 
                 self.t = t.div(tmp).floor()
-                LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: self.t",self.t)
-
-                x = torch.nan_to_num(x)
-                LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: x post nan to num",x)
+                LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.forward: self.t", self.t)
                 x = x + self.t[None, :, None, None]
-                LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: x post add",x)
+                LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.forward: x post add", x)
                 x = x.mul(tmp[None, :, None, None])
-                LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: x post shift",x)
-                x = x.floor().type(torch.int32)
-                LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: x post floor",x)
-                x = x.clamp(self.out_quant.min,self.out_quant.max)
-                LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: x post clamp",x)
+                LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.forward: x post shift", x)
+                x = x.floor().type(self.quant_int_dtype)
+                LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.forward: x post floor", x)
+                x = x.clamp(self.out_quant.min, self.out_quant.max)
+                LOG(__LOG_LEVEL_DEBUG__, "BatchNorm2dBase.forward: x post clamp", x)
+                if __DEBUG__:
+                    if torch.any(torch.isnan(x)):
+                        LOG(__LOG_LEVEL_IMPORTANT__, "BatchNorm2dBase.forward: nan in x", x)
+                    x = torch.nan_to_num(x)
+                    LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.forward: x post nan to num", x)
+
                 rexp = torch.log2(self.out_quant.delta_out)
-                LOG(__LOG_LEVEL_DEBUG__,"BatchNorm2dBase.forward: rexp out",rexp)
+                LOG(__LOG_LEVEL_DEBUG__, "BatchNorm2dBase.forward: rexp out", rexp)
                 return x, rexp

@@ -52,11 +52,14 @@ class LinQuantWeight(Quant):
         Please see class documentation `LinQuantWeight`
         """
         LOG(
-            __LOG_LEVEL_HIGH_DETAIL__,
-            f"LinQuantWeight passed arguments:\n\tsize:\t\t\t{size}\n\trounding_mode:\t{rounding_mode}\n\tquant_int_dtype:\t{quant_int_dtype}",
+            __LOG_LEVEL_DEBUG__,
+            f"LinQuantWeight passed arguments:\n\
+            size:                           {size}\n\
+            rounding_mode:                  {rounding_mode}\n\
+            quant_int_dtype:                {quant_int_dtype}",
         )
         super(LinQuantWeight, self).__init__(size, rounding_mode, quant_int_dtype)
-        
+
         self.bits = bits
         if size == (-1,):
             self.register_buffer("abs", torch.ones(1))
@@ -123,7 +126,7 @@ class LinQuantWeight(Quant):
         )
 
 
-class Conv2dQuant(nn.Conv2d):
+class Conv2d(nn.Conv2d):
     """
     Conv2dQuant The Convolution Class for a quantized convolution
 
@@ -230,7 +233,7 @@ class Conv2dQuant(nn.Conv2d):
             quant_float_dtype:              {quant_float_dtype}\n\
             ",
         )
-        super(Conv2dQuant, self).__init__(
+        super(Conv2d, self).__init__(
             in_channels,
             out_channels,
             kernel_size,
@@ -252,14 +255,13 @@ class Conv2dQuant(nn.Conv2d):
                 "trunc",
             )
 
-        LOG(__LOG_LEVEL_DEBUG__,f"Conv2dQuant.__init__: weight_quant_qrgs",weight_quant_args)
+        LOG(__LOG_LEVEL_DEBUG__, f"Conv2dQuant.__init__: weight_quant_qrgs", weight_quant_args)
 
         if weight_quant == None:
             self.weight_quant = LinQuantWeight(*weight_quant_args, **weight_quant_kargs)
         else:
             self.weight_quant = weight_quant
-        LOG(__LOG_LEVEL_DEBUG__,f"Conv2dQuant.__init__: self.weight_quant",self.weight_quant)
-
+        LOG(__LOG_LEVEL_DEBUG__, f"Conv2dQuant.__init__: self.weight_quant", self.weight_quant)
 
         # Out Quant
         # only used if factor_fun in forward is None
@@ -270,13 +272,13 @@ class Conv2dQuant(nn.Conv2d):
                 0.1,
                 "floor",
             )
-        LOG(__LOG_LEVEL_DEBUG__,f"Conv2dQuant.__init__: out_quant_args",out_quant_args)
+        LOG(__LOG_LEVEL_DEBUG__, f"Conv2dQuant.__init__: out_quant_args", out_quant_args)
 
         if out_quant == None:
             self.out_quant = LinQuantExpScale(*out_quant_args, **out_quant_kargs)
         else:
             self.out_quant = out_quant
-        LOG(__LOG_LEVEL_DEBUG__,f"Conv2dQuant.__init__: self.out_quant",self.out_quant)
+        LOG(__LOG_LEVEL_DEBUG__, f"Conv2dQuant.__init__: self.out_quant", self.out_quant)
 
         self.register_buffer("quant_weight", torch.zeros_like(self.weight))
         LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: quant_weight buffer", self.quant_weight)
@@ -301,26 +303,27 @@ class Conv2dQuant(nn.Conv2d):
 
     def get_weight_factor(self, delta_O: Tensor):
         """
-        get_weight_factor returns a calculation function for the weight scaling 
+        get_weight_factor returns a calculation function for the weight scaling
 
         :param delta_O: Output quantization factor
         :type delta_O: Tensor
         """
+
         def fun(rexp):
             with torch.no_grad():
                 # print(delta_I,delta_O,delta_W)
                 n = rexp.view(-1) / delta_O.view(-1)
-                LOG(__LOG_LEVEL_TO_MUCH__,f"Conv2dQuant.get_weight_factor.fun: pre ceil(log()) n",n)
+                LOG(__LOG_LEVEL_TO_MUCH__, f"Conv2dQuant.get_weight_factor.fun: pre ceil(log()) n", n)
                 n = torch.log2(n)
-                LOG(__LOG_LEVEL_TO_MUCH__,f"Conv2dQuant.get_weight_factor.fun: pre ceil() n",n)
+                LOG(__LOG_LEVEL_TO_MUCH__, f"Conv2dQuant.get_weight_factor.fun: pre ceil() n", n)
                 nr = torch.ceil(n)
-                LOG(__LOG_LEVEL_TO_MUCH__,f"Conv2dQuant.get_weight_factor.fun: nr",nr)
+                LOG(__LOG_LEVEL_TO_MUCH__, f"Conv2dQuant.get_weight_factor.fun: nr", nr)
                 return torch.exp2(n - nr)
 
-        LOG(__LOG_LEVEL_TO_MUCH__,f"Conv2dQuant.get_weight_factor: fun",fun)
+        LOG(__LOG_LEVEL_TO_MUCH__, f"Conv2dQuant.get_weight_factor: fun", fun)
         return fun
 
-    def calculate_n(self, delta_W: Tensor, delta_I: Tensor, delta_O: Tensor)-> Tensor:
+    def calculate_n(self, delta_W: Tensor, delta_I: Tensor, delta_O: Tensor) -> Tensor:
         """
         calculate_n calculates the scaling shift
 
@@ -335,16 +338,18 @@ class Conv2dQuant(nn.Conv2d):
         """
         with torch.no_grad():
             n = delta_W.view(-1) * delta_I.view(-1) / delta_O.view(-1)
-            LOG(__LOG_LEVEL_TO_MUCH__,f"Conv2dQuant.calculate_n: pre ceil(log()) n",n)
+            LOG(__LOG_LEVEL_TO_MUCH__, f"Conv2dQuant.calculate_n: pre ceil(log()) n", n)
             n = torch.log2(n)
-            LOG(__LOG_LEVEL_TO_MUCH__,f"Conv2dQuant.calculate_n: pre ceil() n",n)
+            LOG(__LOG_LEVEL_TO_MUCH__, f"Conv2dQuant.calculate_n: pre ceil() n", n)
             if __DEBUG__:
                 self.debug_n = n.clone()
             nr = torch.ceil(n)
-            LOG(__LOG_LEVEL_DEBUG__,f"Conv2dQuant.calculate_n: nr",nr)
+            LOG(__LOG_LEVEL_DEBUG__, f"Conv2dQuant.calculate_n: nr", nr)
         return nr
 
-    def forward(self, invals: Tuple[torch.Tensor, torch.Tensor], factor_fun:FunctionType=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, invals: Tuple[torch.Tensor, torch.Tensor], factor_fun: FunctionType = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         forward Computes the convolution with quantized weights
 
@@ -358,13 +363,13 @@ class Conv2dQuant(nn.Conv2d):
         :rtype: Tuple[torch.Tensor, torch.Tensor]
         """
         input, rexp = invals
-        LOG(__LOG_LEVEL_DEBUG__,"Conv2dQuant.forward input",input)
-        LOG(__LOG_LEVEL_DEBUG__,"Conv2dQuant.forward rexp",rexp)
+        LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward input", input)
+        LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward rexp", rexp)
 
         rexp_mean = (torch.mean(rexp)).squeeze()
-        LOG(__LOG_LEVEL_TO_MUCH__,"Conv2dQuant.forward rexp_mean",rexp_mean)
+        LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward rexp_mean", rexp_mean)
         rexp_diff = rexp.squeeze() - rexp_mean.unsqueeze(-1)
-        LOG(__LOG_LEVEL_TO_MUCH__,"Conv2dQuant.forward rexp_diff",rexp_diff)
+        LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward rexp_diff", rexp_diff)
 
         weight = self.weight.clone()
 
@@ -382,9 +387,8 @@ class Conv2dQuant(nn.Conv2d):
                 rexp_diff.type(self.quant_float_dtype).exp2(),
                 factor_fun,
             )
-        LOG(__LOG_LEVEL_DEBUG__,"Conv2dQuant.forward weight",weight)
-        LOG(__LOG_LEVEL_TO_MUCH__,"Conv2dQuant.forward fact",fact)
-        
+        LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward weight", weight)
+        LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward fact", fact)
 
         weight = weight.type(self.weight.dtype)
         fact = fact.type(self.weight.dtype)
@@ -402,7 +406,7 @@ class Conv2dQuant(nn.Conv2d):
                 rounding_mode=self.out_quant.rounding_mode,
                 quant_int_dtype=self.out_quant.quant_int_dtype,
             )
-        LOG(__LOG_LEVEL_DEBUG__,"Conv2dQuant.forward bias",bias)
+        LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward bias", bias)
 
         if __DEBUG__:
             self.debug_fact = fact
@@ -414,7 +418,7 @@ class Conv2dQuant(nn.Conv2d):
                 self.t = bias.detach().view(1, -1, 1, 1)
             else:
                 self.t = None
-            LOG(__LOG_LEVEL_DEBUG__,"Conv2dQuant.forward self.t",self.t)
+            LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward self.t", self.t)
 
             self.quant_weight = weight.detach()
             self.n = self.calculate_n(
@@ -422,12 +426,8 @@ class Conv2dQuant(nn.Conv2d):
                 2 ** rexp_mean.view(-1).detach(),
                 self.out_quant.delta_in.view(-1).detach(),
             ).view(1, -1, 1, 1)
-            LOG(__LOG_LEVEL_DEBUG__,"Conv2dQuant.forward self.n",self.n)
+            LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward self.n", self.n)
 
-        # if torch.any(torch.isnan(weight)):
-        #     print(torch.max(torch.abs(self.weight.view(-1))))
-
-        # input = checkNan.apply( input, "conv input")
         if self.training:
             out = self._conv_forward(input, weight, bias)
         else:
@@ -436,8 +436,7 @@ class Conv2dQuant(nn.Conv2d):
                 weight.type(self.quant_float_dtype),
                 None,
             ).type(self.quant_int_dtype)
-        LOG(__LOG_LEVEL_DEBUG__,"Conv2dQuant.forward out",out)
-        
+        LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward out", out)
 
         if factor_fun == None:
             if self.training:
@@ -449,7 +448,7 @@ class Conv2dQuant(nn.Conv2d):
                     )
                 else:
                     out2 = out.mul(torch.exp2(self.n)).clamp_(self.out_quant.min, self.out_quant.max).floor_()
-            LOG(__LOG_LEVEL_DEBUG__,"Conv2dQuant.forward out2",out2)
-            return out2, torch.log2(self.out_quant.delta_out.detach()).view(1,-1,1,1)
+            LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward out2", out2)
+            return out2, torch.log2(self.out_quant.delta_out.detach())
         else:
-            return out, rexp_mean + self.weight_quant.delta_out.log2().view(1,-1,1,1)
+            return out, rexp_mean + self.weight_quant.delta_out.log2().view(1, -1, 1, 1)
