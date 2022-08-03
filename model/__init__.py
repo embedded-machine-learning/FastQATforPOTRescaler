@@ -4,7 +4,7 @@ Enables DEBUG code segments
 """
 
 
-__LOG_VERBOSE__ = 5
+__LOG_VERBOSE__ = 0
 """
 Sets the __LOG_VERBOSE__ score for the whole code
 """
