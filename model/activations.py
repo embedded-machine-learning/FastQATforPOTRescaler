@@ -48,12 +48,11 @@ class LeakReLU(torch.nn.LeakyReLU):
         if self.training:
             x = F.leaky_relu(x, negative_slope=self.negative_slope, inplace=self.inplace)
             LOG(__LOG_LEVEL_TO_MUCH__,"LeakReLU.forward x post relu",x)
-            x = x * (2 ** (-rexp.view(-1)[None, :, None, None]))
-            LOG(__LOG_LEVEL_TO_MUCH__,"LeakReLU.forward x post scaling",x)
-            x = Floor.apply(x)
-            LOG(__LOG_LEVEL_TO_MUCH__,"LeakReLU.forward x post floor",x)
-            x = x / (2 ** (-rexp.view(-1)[None, :, None, None]))
-            LOG(__LOG_LEVEL_TO_MUCH__,"LeakReLU.forward x post scale-back",x)
+            with torch.no_grad():
+                x.data = x.data.div_(rexp.exp2(),rounding_mode="floor")
+                LOG(__LOG_LEVEL_TO_MUCH__,"LeakReLU.forward x post scaling",x)
+                x.data = x.data.mul_(rexp.exp2())
+                LOG(__LOG_LEVEL_TO_MUCH__,"LeakReLU.forward x post scale-back",x)
         else:
             x = F.leaky_relu(x.type(torch.float32), negative_slope=self.negative_slope, inplace=self.inplace)
             LOG(__LOG_LEVEL_TO_MUCH__,"LeakReLU.forward x post relu",x)
@@ -74,6 +73,6 @@ class ReLU(torch.nn.ReLU):
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor]):
         x, rexp = input
-        LOG(__LOG_LEVEL_DEBUG__,"ReLU.forward x",x)
-        LOG(__LOG_LEVEL_DEBUG__,"ReLU.forward rexp",rexp)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__,"ReLU.forward x",x)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__,"ReLU.forward rexp",rexp)
         return super().forward(x), rexp
