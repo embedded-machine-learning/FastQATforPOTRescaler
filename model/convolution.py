@@ -80,7 +80,7 @@ class LinQuantWeight(Quant):
         self.register_buffer("min", torch.tensor(-(2 ** (self.bits - 1) - 1)))
         LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: min buffer", self.min)
 
-    def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
         """
         forward Does the quantization, if :cvar:`self.training` returns floats else ints
 
@@ -398,8 +398,8 @@ class Conv2d(nn.Conv2d):
         else:
             bias = FakeQuant(
                 x=self.bias.clone(),
-                delta_in=self.out_quant.delta_in,
-                delta_out=self.out_quant.delta_out,
+                delta_in=self.out_quant.delta_in.view(-1),
+                delta_out=self.out_quant.delta_out.view(-1),
                 training=self.training,
                 min_quant=self.out_quant.min,
                 max_quant=self.out_quant.max,
@@ -444,11 +444,11 @@ class Conv2d(nn.Conv2d):
             else:
                 if bias != None:
                     out2 = (
-                        out.mul(torch.exp2(self.n)).add_(self.t).clamp_(self.out_quant.min, self.out_quant.max).floor_()
+                        out.mul(torch.exp2(self.n)).floor_().add_(self.t).clamp_(self.out_quant.min, self.out_quant.max)
                     )
                 else:
-                    out2 = out.mul(torch.exp2(self.n)).clamp_(self.out_quant.min, self.out_quant.max).floor_()
+                    out2 = out.mul(torch.exp2(self.n)).floor_().clamp_(self.out_quant.min, self.out_quant.max)
             LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward out2", out2)
             return out2, torch.log2(self.out_quant.delta_out.detach())
         else:
-            return out, rexp_mean + self.weight_quant.delta_out.log2().view(1, -1, 1, 1)
+            return out, rexp_mean + self.weight_quant.delta_out.log2().detach().view(1, -1, 1, 1)

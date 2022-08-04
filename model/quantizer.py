@@ -346,10 +346,10 @@ class LinQuantExpScale(Quant):
                 # print(abs)
                 self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
 
-                # abs = self.abs.log2().ceil().exp2()
+                abs = self.abs.log2().ceil().exp2()
 
-                self.delta_in = self.abs.mul(self.delta_in_factor).detach().log2().ceil().exp2()
-                self.delta_out = abs.mul(self.delta_out_factor).detach().log2().ceil().exp2()
+                self.delta_in = abs.mul(self.delta_in_factor).detach()#.log2().ceil().exp2()
+                self.delta_out = abs.mul(self.delta_out_factor).detach()#.log2().ceil().exp2()
 
         return FakeQuant(
             x=x,
