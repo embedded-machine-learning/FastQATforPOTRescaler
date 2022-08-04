@@ -43,8 +43,8 @@ class LeakReLU(torch.nn.LeakyReLU):
 
     def forward(self, input: Tuple[Tensor, Tensor]):
         x, rexp = input
-        LOG(__LOG_LEVEL_DEBUG__,"LeakReLU.forward x",x)
-        LOG(__LOG_LEVEL_DEBUG__,"LeakReLU.forward rexp",rexp)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__,"LeakReLU.forward x",x)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__,"LeakReLU.forward rexp",rexp)
         if self.training:
             x = F.leaky_relu(x, negative_slope=self.negative_slope, inplace=self.inplace)
             LOG(__LOG_LEVEL_TO_MUCH__,"LeakReLU.forward x post relu",x)

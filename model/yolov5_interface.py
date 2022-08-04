@@ -1,5 +1,5 @@
-from .convolution   import Conv2dQuant_new
-from .batchnorm     import BatchNorm2dBase_new
+from .convolution   import Conv2d
+from .batchnorm     import BatchNorm2d
 from .activations   import LeakReLU
 from .layer         import MaxPool2d,AddQAT
 
@@ -19,8 +19,8 @@ class ConvQAT(nn.Module):
     # Standard convolution
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True):  # ch_in, ch_out, kernel, stride, padding, groups
         super().__init__()
-        self.conv = Conv2dQuant_new(c1, c2, k, s, autopad(k, p), groups=g, bias=False,weight_quant_bits=8,weight_quant_channel_wise=True)
-        self.bn = BatchNorm2dBase_new(c2,outQuantDyn=True,outQuantBits=8)
+        self.conv = Conv2d(c1, c2, k, s, autopad(k, p), groups=g, bias=False,weight_quant_bits=8,weight_quant_channel_wise=True)
+        self.bn = BatchNorm2d(c2,out_quant_channel_wise=True,out_quant_bits=8)
         self.act = LeakReLU(2**-4) if act else nn.Sequential()
 
     def forward(self, x):
@@ -47,7 +47,7 @@ class BottleneckQAT(nn.Module):
         self.cv1 = ConvQAT(c1, c_, 1, 1)
         self.cv2 = ConvQAT(c_, c2, 3, 1, g=g)
         self.add = shortcut and c1 == c2
-        self.AddQAT = AddQAT()
+        self.AddQAT = AddQAT(num_features= c1,out_quant_bits=8,out_quant_channel_wise=True)
 
     def forward(self, x):
         # print("BottleneckQAT")

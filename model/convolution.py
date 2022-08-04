@@ -99,17 +99,17 @@ class LinQuantWeight(Quant):
         """
         with torch.no_grad():
             abs = get_abs(self, x * (rexp_diff.view(1, -1, 1, 1)))
-            LOG(__LOG_LEVEL_DEBUG__, f"LinQuantWeight.forward: abs", abs)
+            LOG(__LOG_LEVEL_HIGH_DETAIL__, f"LinQuantWeight.forward: abs", abs)
 
             self.abs = abs.detach()
-            LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.forward: self.abs", self.abs)
+            LOG(__LOG_LEVEL_HIGH_DETAIL__, f"LinQuantWeight.forward: self.abs", self.abs)
             self.delta_in = self.abs.mul(self.delta_in_factor).detach()
-            LOG(__LOG_LEVEL_DEBUG__, f"LinQuantWeight.forward: self.delta_in", self.delta_in)
+            LOG(__LOG_LEVEL_HIGH_DETAIL__, f"LinQuantWeight.forward: self.delta_in", self.delta_in)
             self.delta_out = self.abs.mul(self.delta_out_factor).detach()
-            LOG(__LOG_LEVEL_DEBUG__, f"LinQuantWeight.forward: self.delta_out", self.delta_out)
+            LOG(__LOG_LEVEL_HIGH_DETAIL__, f"LinQuantWeight.forward: self.delta_out", self.delta_out)
 
             fact = fact_fun(self.delta_out * rexp_mean).view(-1, 1, 1, 1)
-            LOG(__LOG_LEVEL_DEBUG__, f"LinQuantWeight.forward: fact", fact)
+            LOG(__LOG_LEVEL_HIGH_DETAIL__, f"LinQuantWeight.forward: fact", fact)
 
         return (
             FakeQuant(
@@ -344,7 +344,7 @@ class Conv2d(nn.Conv2d):
             if __DEBUG__:
                 self.debug_n = n.clone()
             nr = torch.ceil(n)
-            LOG(__LOG_LEVEL_DEBUG__, f"Conv2dQuant.calculate_n: nr", nr)
+            LOG(__LOG_LEVEL_HIGH_DETAIL__, f"Conv2dQuant.calculate_n: nr", nr)
         return nr
 
     def forward(
@@ -363,8 +363,8 @@ class Conv2d(nn.Conv2d):
         :rtype: Tuple[torch.Tensor, torch.Tensor]
         """
         input, rexp = invals
-        LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward input", input)
-        LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward rexp", rexp)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward input", input)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward rexp", rexp)
 
         rexp_mean = (torch.mean(rexp)).squeeze()
         LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward rexp_mean", rexp_mean)
@@ -387,7 +387,7 @@ class Conv2d(nn.Conv2d):
                 rexp_diff.type(self.quant_float_dtype).exp2(),
                 factor_fun,
             )
-        LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward weight", weight)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward weight", weight)
         LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward fact", fact)
 
         weight = weight.type(self.weight.dtype)
@@ -406,7 +406,7 @@ class Conv2d(nn.Conv2d):
                 rounding_mode=self.out_quant.rounding_mode,
                 quant_int_dtype=self.out_quant.quant_int_dtype,
             )
-        LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward bias", bias)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward bias", bias)
 
         if __DEBUG__:
             self.debug_fact = fact
@@ -426,7 +426,7 @@ class Conv2d(nn.Conv2d):
                 2 ** rexp_mean.view(-1).detach(),
                 self.out_quant.delta_in.view(-1).detach(),
             ).view(1, -1, 1, 1)
-            LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward self.n", self.n)
+            LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward self.n", self.n)
 
         if self.training:
             out = self._conv_forward(input, weight, bias)
@@ -436,7 +436,7 @@ class Conv2d(nn.Conv2d):
                 weight.type(self.quant_float_dtype),
                 None,
             ).type(self.quant_int_dtype)
-        LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward out", out)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward out", out)
 
         if factor_fun == None:
             if self.training:
@@ -448,7 +448,7 @@ class Conv2d(nn.Conv2d):
                     )
                 else:
                     out2 = out.mul(torch.exp2(self.n)).clamp_(self.out_quant.min, self.out_quant.max).floor_()
-            LOG(__LOG_LEVEL_DEBUG__, "Conv2dQuant.forward out2", out2)
+            LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward out2", out2)
             return out2, torch.log2(self.out_quant.delta_out.detach())
         else:
             return out, rexp_mean + self.weight_quant.delta_out.log2().view(1, -1, 1, 1)

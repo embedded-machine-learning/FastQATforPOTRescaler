@@ -12,7 +12,7 @@ from torch.nn.common_types import _size_any_t, _size_2_t, Tensor, _size_any_opt_
 import numpy as np
 
 # current module imports
-from .quantizer import FakeQuant
+from .quantizer import FakeQuant, LinQuantExpScale
 from .convolution import Conv2d
 from .batchnorm import BatchNorm2d
 from .activations import LeakReLU
@@ -56,9 +56,9 @@ class Stopfn(torch.autograd.Function):
             if not training:
                 shape = [1 for _ in range(len(val.shape))]
                 shape[1] = -1
-                LOG(__LOG_LEVEL_DEBUG__, "Stopfn.forward: shape", shape)
+                LOG(__LOG_LEVEL_HIGH_DETAIL__, "Stopfn.forward: shape", shape)
                 val = val.type(dtype).mul_(rexp.exp2().view(*shape))
-                LOG(__LOG_LEVEL_DEBUG__, "Stopfn.forward: val", val)
+                LOG(__LOG_LEVEL_HIGH_DETAIL__, "Stopfn.forward: val", val)
         return val
 
     @staticmethod
@@ -104,7 +104,7 @@ class Start(nn.Module):
         LOG(__LOG_LEVEL_TO_MUCH__, "Start.__init__: buffer min", self.min)
 
     def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
-        LOG(__LOG_LEVEL_DEBUG__, "Start.forward: x", x)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "Start.forward: x", x)
         x = FakeQuant(
             x.clone(),
             self.delta_in,
@@ -139,10 +139,10 @@ class Stop(nn.Module):
         return x
 
 
-
 #########################################################################################
 #                                   BLOCKS                                              #
 #########################################################################################
+
 
 class BlockQuantN(nn.Module):
     """
@@ -273,7 +273,7 @@ class BlockQuantN(nn.Module):
             weight_quant_args=weight_quant_args,
             weight_quant_kargs=weight_quant_kargs,
             out_quant=None,
-            out_quant_bits=-1,
+            out_quant_bits=1,
             out_quant_channel_wise=False,
             out_quant_args=None,
             out_quant_kargs={},
@@ -323,8 +323,10 @@ class BlockQuantNwoA(BlockQuantN):
 
     Please see `BlockQuantN` for details
     """
+
     def __init__(
         self,
+        # Convolution
         in_channels: int,
         out_channels: int,
         kernel_size: _size_2_t,
@@ -338,6 +340,7 @@ class BlockQuantNwoA(BlockQuantN):
         weight_quant_channel_wise=False,
         weight_quant_args=None,
         weight_quant_kargs={},
+        # Batch-Norm
         eps: float = 0.00001,
         momentum: float = 0.1,
         affine: bool = True,
@@ -348,6 +351,7 @@ class BlockQuantNwoA(BlockQuantN):
         out_quant_channel_wise=False,
         out_quant_args=None,
         out_quant_kargs={},
+        # General Stuff
         quant_int_dtype: torch.dtype = torch.int32,
         quant_float_dtype: torch.dtype = torch.float32,
         device=None,
@@ -391,55 +395,106 @@ class BlockQuantNwoA(BlockQuantN):
 #########################################################################################
 #                                   Common Layers                                       #
 #########################################################################################
-
-
-class AddQAT_(torch.autograd.Function):
-    @staticmethod
-    def forward(_, a, b, a_shift, b_shift, rexp, training):
-        with torch.no_grad():
-            if training:
-                va = (a * torch.exp2(-rexp).view(-1)[None, :, None, None]).floor()
-                vb = (b * torch.exp2(-rexp).view(-1)[None, :, None, None]).floor()
-            else:
-                va = a.mul(torch.exp2(-a_shift).view(-1)[None, :, None, None]).floor()
-                vb = b.mul(torch.exp2(-b_shift).view(-1)[None, :, None, None]).floor()
-            # explicit quant domaine
-            va = va.add(vb)
-
-            # done
-            if training:
-                va = va.mul(torch.exp2(rexp).view(-1)[None, :, None, None])
-
-            return va
-
-    @staticmethod
-    def backward(_, outgrad):
-        return outgrad.detach(), outgrad.detach(), None, None, None, None
-
-
 class AddQAT(nn.Module):
-    def __init__(self) -> None:
+    """
+     AddQAT Adds 2 numbers
+
+     there is an internal scaling and the required shift operations are being calculated
+
+     :param num_features: number of features
+     :type num_features: int
+     :param out_quant:  A callable object which overrides the default output quantization, gets called with (values) , defaults to None
+     :type out_quant: _type_, optional
+     :param out_quant_bits: Number of bits for the output quantization, defaults to 8
+     :type out_quant_bits: int, optional
+     :param out_quant_channel_wise: Channel-wise output quantization, defaults to False
+     :type out_quant_channel_wise: bool, optional
+     :param out_quant_args:  Overrides arguments for the out quantization initializer with custom ones, defaults to None
+     :type out_quant_args: _type_, optional
+     :param out_quant_kargs: Passes named arguments to the initializer of the out quantization class, defaults to {}
+     :type out_quant_kargs: dict, optional
+    :param quant_int_dtype: The desired integer type, defaults to torch.int32
+     :type quant_int_dtype: torch.dtype, optional
+    """
+
+    def __init__(
+        self,
+        num_features: int,
+        out_quant=None,
+        out_quant_bits: int = 8,
+        out_quant_channel_wise: bool = False,
+        out_quant_args=None,
+        out_quant_kargs={},
+        quant_int_dtype: torch.dtype = torch.int32,
+    ) -> None:
+        LOG(
+            __LOG_LEVEL_DEBUG__,
+            f"AddQAT passed arguments:\n\
+            num_features:                   {num_features}\n\
+            out_quant:                      {out_quant}\n\
+            out_quant_bits:                 {out_quant_bits}\n\
+            out_quant_channel_wise:         {out_quant_channel_wise}\n\
+            out_quant_args:                 {out_quant_args}\n\
+            out_quant_kargs:                {out_quant_kargs}\n\
+            quant_int_dtype:                {quant_int_dtype}\n\
+            ",
+        )
         super(AddQAT, self).__init__()
 
         self.register_buffer("a_shift", torch.Tensor([0.0]))
+        LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.__init__: buffer a_shift", self.a_shift)
         self.register_buffer("b_shift", torch.Tensor([0.0]))
+        LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.__init__: buffer b_shift", self.b_shift)
+
+        if out_quant_args == None:
+            out_quant_args = (
+                out_quant_bits,
+                (-1,) if not out_quant_channel_wise else (1, num_features, 1, 1),
+                0.1,
+                "floor",
+                quant_int_dtype,
+            )
+        LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.__init__: out_quant_args", out_quant_args)
+
+        if out_quant == None:
+            self.out_quant = LinQuantExpScale(*out_quant_args, **out_quant_kargs)
+        else:
+            self.out_quant = out_quant
+        LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.__init__: self.out_quant", self.out_quant)
 
     def forward(self, a, b):
         if a[0].shape != b[0].shape:
             raise torch.ErrorReport("testW")
-        arexp = a[1]
-        brexp = b[1]
-        rexp = torch.max(arexp, brexp)
-        self.a_shift = -(arexp - rexp).detach()
-        self.b_shift = -(brexp - rexp).detach()
-        out = AddQAT_.apply(a[0], b[0], self.a_shift, self.b_shift, rexp, self.training)
-        # print("AddQAT")
-        # print(out.shape,a[0].shape)
+        if self.training:
+            out = a[0] + b[0]
+            LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: out", out)
+            out = self.out_quant(out.clone())
+            LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: out post quant", out)
+            rexp = self.out_quant.delta_out.log2()
+            LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: rexp", rexp)
+        else:
+            rexp = self.out_quant.delta_out.log2()
+            LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: rexp", rexp)
+            self.a_shift = -(a[1] - rexp).detach()
+            LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: self.a_shift", self.a_shift)
+            self.b_shift = -(b[1] - rexp).detach()
+            LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: self.b_shift", self.b_shift)
+            va = a[0].div(self.a_shift.exp2(), rounding_mode="floor")
+            LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: va", va)
+            vb = b[0].div(self.b_shift.exp2(), rounding_mode="floor")
+            LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: vb", vb)
+            out = va + vb
+            LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: out", out)
+            out = out.clamp(self.out_quant.min, self.out_quant.max)
+            LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: out post clamp", out)
+
         return out, rexp
-        out = a[0]+b[0]
-        out = FakeQuant(out,(rexp+1).exp2(),(rexp+1).exp2(),self.training,)
+
 
 def Flatten(input: Tuple[torch.Tensor, torch.Tensor], dim: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Flatten encapsulation of torch.flatten
+    """
     val, rexp = input
     orexp = rexp.detach() * torch.ones_like(val[0, :])
     return val.flatten(dim), orexp.flatten(dim)
@@ -461,11 +516,6 @@ class MaxPool2d(nn.MaxPool2d):
         ceil_mode: bool = False,
     ) -> None:
         super(MaxPool2d, self).__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)
-
-    def convert(self):
-        return nn.MaxPool2d(
-            self.kernel_size, self.stride, self.padding, self.dilation, self.return_indices, self.ceil_mode
-        )
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor]):
         val, rexp = input

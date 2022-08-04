@@ -58,9 +58,9 @@ def calculate_n(
     """
     with torch.no_grad():
         n = torch.log2(weight.abs() / (out_quant * torch.sqrt(var + 1e-5))) + rexp.view(-1)
-        LOG(__LOG_LEVEL_DEBUG__, "calculate_n: n", n)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_n: n", n)
         n = n.ceil()
-        LOG(__LOG_LEVEL_DEBUG__, "calculate_n: n post ceil", n)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_n: n post ceil", n)
         return n
 
 
@@ -92,11 +92,11 @@ def calculate_n_fixed(
     """
     with torch.no_grad():
         n = torch.log2(weight.abs() / (out_quant * torch.sqrt(var + 1e-5))) + rexp.view(-1)
-        LOG(__LOG_LEVEL_DEBUG__, "calculate_n_fixed: n", n)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_n_fixed: n", n)
         nr = n.max() * torch.ones_like(n)
-        LOG(__LOG_LEVEL_DEBUG__, "calculate_n_fixed: nr", nr)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_n_fixed: nr", nr)
         nr = nr.ceil()
-        LOG(__LOG_LEVEL_DEBUG__, "calculate_n_fixed: nr post ceil", nr)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_n_fixed: nr post ceil", nr)
         return nr
 
 
@@ -129,7 +129,7 @@ def calculate_t(
     """
     with torch.no_grad():
         t = -mean * (weight.abs() / (out_quant * torch.sqrt(var + 1e-5))) + bias / out_quant
-        LOG(__LOG_LEVEL_DEBUG__, "calculate_t: t", t)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_t: t", t)
         return t
 
 
@@ -158,11 +158,11 @@ def calculate_alpha(
     """
     with torch.no_grad():
         n = torch.log2(weight.abs() * rexp.view(-1) / (out_quant * torch.sqrt(var + 1e-5)))
-        LOG(__LOG_LEVEL_DEBUG__, "calculate_alpha: n", n)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_alpha: n", n)
         nr = torch.ceil(n)
-        LOG(__LOG_LEVEL_DEBUG__, "calculate_alpha: nr", nr)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_alpha: nr", nr)
         alpha = torch.sign(weight) * torch.exp2(n - nr)
-        LOG(__LOG_LEVEL_DEBUG__, "calculate_alpha: alpha", alpha)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_alpha: alpha", alpha)
     return alpha
 
 
@@ -191,13 +191,13 @@ def calculate_alpha_fixed(
     """
     with torch.no_grad():
         n = torch.log2(weight.abs() / (out_quant * torch.sqrt(var + 1e-5))) + rexp.view(-1)
-        LOG(__LOG_LEVEL_DEBUG__, "calculate_alpha_fixed: n", n)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_alpha_fixed: n", n)
         nr = n.max() * torch.ones_like(n)
-        LOG(__LOG_LEVEL_DEBUG__, "calculate_alpha_fixed: nr", nr)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_alpha_fixed: nr", nr)
         nr = torch.ceil(nr)
-        LOG(__LOG_LEVEL_DEBUG__, "calculate_alpha_fixed: nr post ceil", nr)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_alpha_fixed: nr post ceil", nr)
         alpha = torch.sign(weight) * torch.exp2(n - nr)
-        LOG(__LOG_LEVEL_DEBUG__, "calculate_alpha_fixed: alpha", alpha)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_alpha_fixed: alpha", alpha)
     raise NotImplementedError()
     return alpha
 
@@ -221,7 +221,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
 
     :param fixed_n: Set the shift to a layer-wise value rather than channel-wise, defaults to False
     :type fixed_n: bool, optional
-    
+
     :param out_quant:  A callable object which overrides the default output quantization, gets called with (values) , defaults to None
     :type out_quant: _type_, optional
     :param out_quant_bits: Number of bits for the output quantization, defaults to 8
@@ -257,7 +257,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         quant_int_dtype: torch.dtype = torch.int32,
         quant_float_dtype: torch.dtype = torch.float32,
     ):
-    
+
         """
         Please read the class help
         """
@@ -305,7 +305,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         if out_quant_args == None:
             out_quant_args = (
                 out_quant_bits,
-                (-1,) if not out_quant_channel_wise else (1, num_features),
+                (-1,) if not out_quant_channel_wise else (1, num_features, 1, 1),
                 0.1,
                 "floor",
                 quant_int_dtype,
@@ -326,7 +326,6 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         self.quant_float_dtype = quant_float_dtype
         LOG(__LOG_LEVEL_TO_MUCH__, f"BatchNorm2dBase.__init__: self.quant_float_dtype", self.quant_float_dtype)
 
-
     def get_weight_factor(self):
         """
         get_weight_factor Returns a function to calculate alpha with a singe value
@@ -340,22 +339,22 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                 out_quant=self.out_quant.delta_out.view(-1).detach(),
                 rexp=rexp.view(-1).detach(),
             )
-            LOG(__LOG_LEVEL_DEBUG__, "BatchNorm2dBase.get_weight_factor.ret_fun: self.alpha", self.alpha)
+            LOG(__LOG_LEVEL_HIGH_DETAIL__, "BatchNorm2dBase.get_weight_factor.ret_fun: self.alpha", self.alpha)
             return self.alpha[:, None, None, None]
 
         return ret_fun
 
     def forward(self, input: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         x, rexp = input
-        LOG(__LOG_LEVEL_DEBUG__, "BatchNorm2dBase.forward: x", x)
-        LOG(__LOG_LEVEL_DEBUG__, "BatchNorm2dBase.forward: rexp", rexp)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "BatchNorm2dBase.forward: x", x)
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "BatchNorm2dBase.forward: rexp", rexp)
 
         if self.training:
-            if x.dtype == self.quant_int_dtype :
+            if x.dtype == self.quant_int_dtype:
                 x = super().forward(x.type(self.quant_float_dtype))
             else:
                 x = super().forward(x)
-            LOG(__LOG_LEVEL_DEBUG__, "BatchNorm2dBase.forward: x post super().forward", x)
+            LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.forward: x post super().forward", x)
 
             x = self.out_quant(x)
             LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.forward: x post quant", x)
@@ -371,7 +370,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                     out_quant=self.out_quant.delta_in.view(-1),
                     rexp=rexp.view(-1),
                 ).detach()
-                LOG(__LOG_LEVEL_DEBUG__, "BatchNorm2dBase.forward: self.n", self.n)
+                LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.forward: self.n", self.n)
 
                 t = self.func_t(
                     weight=self.weight.view(-1),
@@ -396,7 +395,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                 x = x.floor().type(self.quant_int_dtype)
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.forward: x post floor", x)
                 x = x.clamp(self.out_quant.min, self.out_quant.max)
-                LOG(__LOG_LEVEL_DEBUG__, "BatchNorm2dBase.forward: x post clamp", x)
+                LOG(__LOG_LEVEL_HIGH_DETAIL__, "BatchNorm2dBase.forward: x post clamp", x)
                 if __DEBUG__:
                     if torch.any(torch.isnan(x)):
                         LOG(__LOG_LEVEL_IMPORTANT__, "BatchNorm2dBase.forward: nan in x", x)
@@ -404,5 +403,5 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                     LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2dBase.forward: x post nan to num", x)
 
                 rexp = torch.log2(self.out_quant.delta_out)
-                LOG(__LOG_LEVEL_DEBUG__, "BatchNorm2dBase.forward: rexp out", rexp)
+                LOG(__LOG_LEVEL_HIGH_DETAIL__, "BatchNorm2dBase.forward: rexp out", rexp)
                 return x, rexp

@@ -7,8 +7,8 @@ from torchvision.utils          import _log_api_usage_once
 from torchvision.models._api    import WeightsEnum
 from torchvision.models._utils  import _ovewrite_named_param
 
-from .convolution   import Conv2dQuant
-from .batchnorm     import BatchNorm2dBase
+from .convolution   import Conv2d
+from .batchnorm     import BatchNorm2d
 from .activations   import ReLU
 from .layer         import AddQAT, MaxPool2d, Start, Stop, AdaptiveAvgPool2d, Flatten
 from .Linear        import Linear
@@ -19,9 +19,9 @@ from .Linear        import Linear
 
 
 
-def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> Conv2dQuant:
+def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> Conv2d:
     """3x3 convolution with padding"""
-    return Conv2dQuant(
+    return Conv2d(
         in_planes,
         out_planes,
         kernel_size=3,
@@ -37,9 +37,9 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
     )
 
 
-def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> Conv2dQuant:
+def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> Conv2d:
     """1x1 convolution"""
-    return Conv2dQuant(
+    return Conv2d(
         in_planes, 
         out_planes, 
         kernel_size=1, 
@@ -60,7 +60,7 @@ class Downsample_Block(nn.Module):
         self.stride     = stride
 
         self.conv   = conv1x1(inplanes,planes*expansion,stride)
-        self.bn     = BatchNorm2dBase(planes * expansion)
+        self.bn     = BatchNorm2d(planes * expansion)
 
     def forward(self,x):
         fact1 = self.bn.get_weight_factor()
@@ -85,7 +85,7 @@ class BasicBlock(nn.Module):
     ) -> None:
         super().__init__()
         if norm_layer is None:
-            norm_layer = BatchNorm2dBase
+            norm_layer = BatchNorm2d
         if groups != 1 or base_width != 64:
             raise ValueError("BasicBlock only supports groups=1 and base_width=64")
         if dilation > 1:
@@ -98,7 +98,7 @@ class BasicBlock(nn.Module):
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
         self.stride = stride
-        self.add = AddQAT()
+        self.add = AddQAT(planes,out_quant_bits=8,out_quant_channel_wise=True)
 
     def forward(self, x: Tuple[torch.Tensor,torch.Tensor]) -> Tuple[torch.Tensor,torch.Tensor]:
         identity = x
@@ -139,7 +139,7 @@ class Bottleneck(nn.Module):
     ) -> None:
         super().__init__()
         if norm_layer is None:
-            norm_layer = BatchNorm2dBase
+            norm_layer = BatchNorm2d
         width = int(planes * (base_width / 64.0)) * groups
         # Both self.conv2 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv1x1(inplanes, width)
@@ -196,7 +196,7 @@ class ResNet(nn.Module):
         super().__init__()
         _log_api_usage_once(self)
         if norm_layer is None:
-            norm_layer = BatchNorm2dBase
+            norm_layer = BatchNorm2d
         self._norm_layer = norm_layer
 
         self.inplanes = 64
@@ -212,7 +212,7 @@ class ResNet(nn.Module):
             )
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = Conv2dQuant(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False,weight_quant_bits=8,weight_quant_channel_wise=True)
+        self.conv1 = Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False,weight_quant_bits=8,weight_quant_channel_wise=True)
         self.bn1 = norm_layer(self.inplanes)
         self.relu = ReLU(inplace=False)
         self.maxpool = MaxPool2d(kernel_size=3, stride=2, padding=1)
