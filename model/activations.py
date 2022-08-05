@@ -9,7 +9,7 @@ from torch.nn.common_types import Tensor
 
 # current module imports
 from .utils import Floor
-from .quantizer import FakeQuant, Quant
+from .quantizer import FakeQuant, Quant, get_abs
 
 # Global information imports
 from . import (
@@ -201,7 +201,11 @@ class PACT_fused_2(Quant):
     def forward(self, x: torch.Tensor,fake:bool = False):
         if self.training:
             with torch.no_grad():
-                abs = self.alpha.log2().ceil().exp2()
+                abs = get_abs(self, x)
+                # print(abs)
+                self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
+
+                abs = self.alpha.clamp(max=self.abs).log2().ceil().exp2()
                 self.delta_in = abs.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
                 self.delta_out = abs.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
 
