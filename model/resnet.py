@@ -93,12 +93,12 @@ class BasicBlock(nn.Module):
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = norm_layer(planes,out_quant=PACT_fused_2(bits=8,size=(1,planes,1,1)))
-        self.relu = ReLU(inplace=False)
+        # self.relu = ReLU(inplace=False)
         self.conv2 = conv3x3(planes, planes)
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
         self.stride = stride
-        self.add = AddQAT(planes,out_quant_bits=8,out_quant_channel_wise=True)
+        self.add = AddQAT(out_quant=PACT_fused_2(bits=8,size=(1,planes,1,1)))
 
     def forward(self, x: Tuple[torch.Tensor,torch.Tensor]) -> Tuple[torch.Tensor,torch.Tensor]:
         identity = x
@@ -114,7 +114,8 @@ class BasicBlock(nn.Module):
             identity = self.downsample(x)
 
         out = self.add(out,identity)
-        out = self.relu(out)
+        # out = self.relu(out)
+        # relu fused into add
         return out
 
 
@@ -149,10 +150,10 @@ class Bottleneck(nn.Module):
         self.bn2 = norm_layer(width,out_quant=PACT_fused_2(bits=8,size=(1,width,1,1)))
         self.conv3 = conv1x1(width, planes * self.expansion)
         self.bn3 = norm_layer(planes * self.expansion)
-        self.relu = ReLU(inplace=False)
+        # self.relu = ReLU(inplace=False)
         self.downsample = downsample
         self.stride = stride
-        self.add = AddQAT()
+        self.add = AddQAT(out_quant=PACT_fused_2(bits=8,size=(1,planes * self.expansion,1,1)))
 
     def forward(self, x: Tuple[torch.Tensor,torch.Tensor]) -> Tuple[torch.Tensor,torch.Tensor]:
         identity = x
@@ -176,7 +177,7 @@ class Bottleneck(nn.Module):
             identity = self.downsample(x)
 
         out = self.add(out,identity)
-        out = self.relu(out)
+        # relu fused into add
 
         return out
 
