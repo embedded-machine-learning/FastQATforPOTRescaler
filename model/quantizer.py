@@ -257,10 +257,9 @@ class Quant(nn.Module):
             self.register_buffer("delta_out", torch.ones(size))
             self.size = size
 
-        LOG(__LOG_LEVEL_TO_MUCH__,"Quant.__init: buffer delta_in",self.delta_in)
-        LOG(__LOG_LEVEL_TO_MUCH__,"Quant.__init: buffer delta_out",self.delta_out)
-        LOG(__LOG_LEVEL_DEBUG__,"Quant.__init: simple",self.simple)
-
+        LOG(__LOG_LEVEL_TO_MUCH__, "Quant.__init: buffer delta_in", self.delta_in)
+        LOG(__LOG_LEVEL_TO_MUCH__, "Quant.__init: buffer delta_out", self.delta_out)
+        LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: simple", self.simple)
 
         self.permutelist = []
         self.numberofdims = 0
@@ -272,13 +271,13 @@ class Quant(nn.Module):
             else:
                 self.permutelist.append(i)
 
-        LOG(__LOG_LEVEL_DEBUG__,"Quant.__init: numberofdims",self.numberofdims)
+        LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: numberofdims", self.numberofdims)
         self.permutelist = tuple(self.permutelist)
-        LOG(__LOG_LEVEL_DEBUG__,"Quant.__init: permutelist",self.permutelist)
+        LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: permutelist", self.permutelist)
         self.rounding_mode = rounding_mode
-        LOG(__LOG_LEVEL_DEBUG__,"Quant.__init: rounding_mode",self.rounding_mode)
+        LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: rounding_mode", self.rounding_mode)
         self.quant_int_dtype = quant_int_dtype
-        LOG(__LOG_LEVEL_DEBUG__,"Quant.__init: quant_int_dtype",self.quant_int_dtype)
+        LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: quant_int_dtype", self.quant_int_dtype)
 
     def forward(self, x):
         raise NotImplementedError()
@@ -339,17 +338,30 @@ class LinQuantExpScale(Quant):
         self.register_buffer("max", torch.tensor(2 ** (self.bits - 1) - 1))
         self.register_buffer("min", torch.tensor(-(2 ** (self.bits - 1))))
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, min=None, max=None):
         if self.training:
             with torch.no_grad():
-                abs = get_abs(self, x)
-                # print(abs)
-                self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
+                if min == None and max == None:
+                    abs = get_abs(self, x)
+                    # print(abs)
+                    self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
 
-                abs = self.abs.log2().ceil().exp2()
+                    abs = self.abs.log2().ceil().exp2()
+                    self.delta_in = abs.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
+                    self.delta_out = abs.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
+                else:
+                    assert min != None
+                    assert max != None
+                    abs = torch.max(min.abs(),max.abs())
 
-                self.delta_in = abs.mul(self.delta_in_factor).detach()#.log2().ceil().exp2()
-                self.delta_out = abs.mul(self.delta_out_factor).detach()#.log2().ceil().exp2()
+                    self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
+                    
+                    abs = self.abs.log2().ceil().exp2()
+                    self.delta_in = abs.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
+                    self.delta_out = abs.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
+
+                    self.min = min.div(self.delta_in,rounding_mode = self.rounding_mode)
+                    self.max = max.div(self.delta_in,rounding_mode = self.rounding_mode)
 
         return FakeQuant(
             x=x,
