@@ -180,7 +180,7 @@ class PACT_fused_2(Quant):
     :type size: tuple, optional
     """
     def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
-        super(PACT_fused_2, self).__init__(size, rounding_mode, quant_int_dtype)
+        super(PACT_fused_2, self).__init__(bits,size, rounding_mode, quant_int_dtype)
         self.bits = bits
         if size == (-1,):
             self.register_buffer("abs", torch.ones(1))
@@ -198,7 +198,7 @@ class PACT_fused_2(Quant):
         self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones(size)))
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor,fake:bool = False):
         if self.training:
             with torch.no_grad():
                 abs = self.alpha.log2().ceil().exp2()
@@ -208,16 +208,7 @@ class PACT_fused_2(Quant):
                 self.max = self.alpha.div(self.delta_in,rounding_mode = self.rounding_mode)
 
             x = PACT_back_function.apply(x,self.alpha)
-        return FakeQuant(
-            x=x,
-            delta_in=self.delta_in,
-            delta_out=self.delta_out,
-            training=self.training,
-            min_quant=self.min,
-            max_quant=self.max,
-            rounding_mode=self.rounding_mode,
-            quant_int_dtype=self.quant_int_dtype,
-        )
+        return super().forward(x,fake)
 
 
 class PACT_function(torch.autograd.Function):

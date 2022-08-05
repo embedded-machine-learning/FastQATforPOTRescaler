@@ -56,7 +56,7 @@ class LinQuantWeight(Quant):
             __LOG_LEVEL_HIGH_DETAIL__,
             f"LinQuantWeight passed arguments:\n\tsize:\t\t\t{size}\n\trounding_mode:\t{rounding_mode}\n\tquant_int_dtype:\t{quant_int_dtype}",
         )
-        super(LinQuantWeight, self).__init__(size, rounding_mode, quant_int_dtype)
+        super(LinQuantWeight, self).__init__(bits,size, rounding_mode, quant_int_dtype)
 
         self.bits = bits
         if size == (-1,):

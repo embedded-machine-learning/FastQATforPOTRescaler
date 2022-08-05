@@ -236,7 +236,7 @@ class Quant(nn.Module):
     :type quant_int_dtype: torch.dtype, optional
     """
 
-    def __init__(self, size=Tuple, rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
+    def __init__(self, bits,size=Tuple, rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
         super(Quant, self).__init__()
         LOG(
             __LOG_LEVEL_DEBUG__,
@@ -247,6 +247,7 @@ class Quant(nn.Module):
             ",
         )
         self.simple = False
+        self.bits = bits
         if size == (-1,):
             self.register_buffer("delta_in", torch.ones(1))
             self.register_buffer("delta_out", torch.ones(1))
@@ -279,14 +280,29 @@ class Quant(nn.Module):
         self.quant_int_dtype = quant_int_dtype
         LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: quant_int_dtype", self.quant_int_dtype)
 
-    def forward(self, x):
-        raise NotImplementedError()
+        self.register_buffer("max", torch.tensor(2 ** (self.bits - 1) - 1))
+        LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: buffer max", self.max)
+        self.register_buffer("min", torch.tensor(-(2 ** (self.bits - 1))))
+        LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: buffer min", self.min)
+
+    def forward(self, x:Tensor, fake:bool = False):
+        if fake:
+            return x
+        return FakeQuant(
+            x=x,
+            delta_in=self.delta_in,
+            delta_out=self.delta_out,
+            training=self.training,
+            min_quant=self.min,
+            max_quant=self.max,
+            rounding_mode=self.rounding_mode,
+            quant_int_dtype=self.quant_int_dtype,
+        )
 
 
 class LinQuant(Quant):
     def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
-        super(LinQuant, self).__init__(size, rounding_mode, quant_int_dtype)
-        self.bits = bits
+        super(LinQuant, self).__init__(bits,size, rounding_mode, quant_int_dtype)
         if size == (-1,):
             self.register_buffer("abs", torch.ones(1))
         else:
@@ -296,9 +312,6 @@ class LinQuant(Quant):
         assert self.bits > 0
         self.register_buffer("delta_in_factor", torch.tensor(2.0 / (2.0**self.bits - 1)))
         self.register_buffer("delta_out_factor", torch.tensor(2.0 / (2.0**self.bits - 1)))
-
-        self.register_buffer("max", torch.tensor(2 ** (self.bits - 1) - 1))
-        self.register_buffer("min", torch.tensor(-(2 ** (self.bits - 1))))
 
     def forward(self, x: torch.Tensor):
         if self.training:
@@ -308,23 +321,14 @@ class LinQuant(Quant):
                 self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
                 self.delta_in = self.abs.mul(self.delta_in_factor).detach()
                 self.delta_out = self.abs.mul(self.delta_out_factor).detach()
+        return super().forward(x)
 
-        return FakeQuant(
-            x=x,
-            delta_in=self.delta_in,
-            delta_out=self.delta_out,
-            training=self.training,
-            min_quant=self.min,
-            max_quant=self.max,
-            rounding_mode=self.rounding_mode,
-            quant_int_dtype=self.quant_int_dtype,
-        )
+        
 
 
 class LinQuantExpScale(Quant):
     def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
-        super(LinQuantExpScale, self).__init__(size, rounding_mode, quant_int_dtype)
-        self.bits = bits
+        super(LinQuantExpScale, self).__init__(bits,size, rounding_mode, quant_int_dtype)
         if size == (-1,):
             self.register_buffer("abs", torch.ones(1))
         else:
@@ -338,41 +342,18 @@ class LinQuantExpScale(Quant):
         self.register_buffer("max", torch.tensor(2 ** (self.bits - 1) - 1))
         self.register_buffer("min", torch.tensor(-(2 ** (self.bits - 1))))
 
-    def forward(self, x: torch.Tensor, min=None, max=None):
+    def forward(self, x: torch.Tensor, fake:bool = False):
         if self.training:
             with torch.no_grad():
-                if min == None and max == None:
-                    abs = get_abs(self, x)
-                    # print(abs)
-                    self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
+                abs = get_abs(self, x)
+                # print(abs)
+                self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
 
-                    abs = self.abs.log2().ceil().exp2()
-                    self.delta_in = abs.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
-                    self.delta_out = abs.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
-                else:
-                    assert min != None
-                    assert max != None
-                    abs = torch.max(min.abs(),max.abs())
+                abs = self.abs.log2().ceil().exp2()
+                self.delta_in = abs.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
+                self.delta_out = abs.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
 
-                    self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
-                    
-                    abs = self.abs.log2().ceil().exp2()
-                    self.delta_in = abs.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
-                    self.delta_out = abs.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
-
-                    self.min = min.div(self.delta_in,rounding_mode = self.rounding_mode)
-                    self.max = max.div(self.delta_in,rounding_mode = self.rounding_mode)
-
-        return FakeQuant(
-            x=x,
-            delta_in=self.delta_in,
-            delta_out=self.delta_out,
-            training=self.training,
-            min_quant=self.min,
-            max_quant=self.max,
-            rounding_mode=self.rounding_mode,
-            quant_int_dtype=self.quant_int_dtype,
-        )
+        return super().forward(x,fake)
 
 
 #########################################################################################################################

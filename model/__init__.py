@@ -1,3 +1,9 @@
+__HIGH_PRES__ = False
+"""
+Enables high precision mode, network will take longer and will need more memory 
+"""
+
+
 __DEBUG__ = False
 """
 Enables DEBUG code segments 

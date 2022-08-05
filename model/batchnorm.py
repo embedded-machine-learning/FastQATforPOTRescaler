@@ -1,4 +1,5 @@
 # Generic Type imports
+from operator import xor
 from types import FunctionType
 from typing import Tuple
 
@@ -22,6 +23,7 @@ from . import (
     __LOG_LEVEL_DEBUG__,
     __LOG_LEVEL_HIGH_DETAIL__,
     __LOG_LEVEL_TO_MUCH__,
+    __HIGH_PRES__
 )
 
 
@@ -350,14 +352,49 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "BatchNorm2d.forward: rexp", rexp)
 
         if self.training:
+            if __HIGH_PRES__:
+                xorig = x.detach().clone()
+
             if x.dtype == self.quant_int_dtype:
                 x = super().forward(x.type(self.quant_float_dtype))
             else:
                 x = super().forward(x)
             LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post super().forward", x)
 
-            x = self.out_quant(x)
-            LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post quant", x)
+            if not __HIGH_PRES__:
+                LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post quant", x)
+                x = self.out_quant(x,False)
+            else:
+                x = self.out_quant(x,True)
+                with torch.no_grad():
+
+                    n = self.weight.abs().view(-1)/ (self.out_quant.delta_in.view(-1) * torch.sqrt(self.running_var.view(-1) + self.eps))
+                    nr = self.func_n(
+                        weight=torch.abs(self.weight.view(-1)),
+                        bias=self.bias.view(-1),
+                        mean=self.running_mean.view(-1),
+                        var=self.running_var.view(-1),
+                        out_quant=self.out_quant.delta_in.view(-1),
+                        rexp=rexp.view(-1),
+                    )
+                    t = self.func_t(
+                        weight=self.weight.view(-1),
+                        bias=self.bias.view(-1),
+                        mean=self.running_mean.view(-1),
+                        var=self.running_var.view(-1),
+                        out_quant=self.out_quant.delta_in.view(-1),
+                        rexp=rexp.view(-1),
+                        n=nr.view(-1),
+                    )
+
+                    tmp = torch.exp2(nr)
+                    t = t.div(tmp).floor()
+                    t = t.mul(nr.exp2())
+
+                    xorig = xorig.mul_(n.view(1,-1,1,1)).add_(t.view(1,-1,1,1)).floor_().clamp_(min=self.out_quant.min,max=self.out_quant.max).mul_(self.out_quant.delta_out)
+                    x.data = xorig
+
+            rexp = torch.log2(self.out_quant.delta_out)
             return x, rexp
 
         else:

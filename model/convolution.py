@@ -58,9 +58,8 @@ class LinQuantWeight(Quant):
             rounding_mode:                  {rounding_mode}\n\
             quant_int_dtype:                {quant_int_dtype}",
         )
-        super(LinQuantWeight, self).__init__(size, rounding_mode, quant_int_dtype)
+        super(LinQuantWeight, self).__init__(bits,size, rounding_mode, quant_int_dtype)
 
-        self.bits = bits
         if size == (-1,):
             self.register_buffer("abs", torch.ones(1))
         else:
