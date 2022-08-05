@@ -233,9 +233,6 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
     :param out_quant_kargs: Passes named arguments to the initializer of the out quantization class, defaults to {}
     :type out_quant_kargs: dict, optional
 
-    :param fused_activation: callable
-    :type fused_activation: _type_
-
     :param quant_int_dtype: The desired integer type, defaults to torch.int32
     :type quant_int_dtype: torch.dtype, optional
     :param quant_float_dtype: The desired floating-point type, defaults to torch.float32
@@ -257,7 +254,6 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         out_quant_channel_wise: bool = False,
         out_quant_args=None,
         out_quant_kargs={},
-        fused_activation=None,
         quant_int_dtype: torch.dtype = torch.int32,
         quant_float_dtype: torch.dtype = torch.float32,
     ):
@@ -281,7 +277,6 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             out_quant_channel_wise:         {out_quant_channel_wise}\n\
             out_quant_args:                 {out_quant_args}\n\
             out_quant_kargs:                {out_quant_kargs}\n\
-            fused_activation:               {fused_activation}\n\
             quant_int_dtype:                {quant_int_dtype}\n\
             quant_float_dtype:              {quant_float_dtype}\n\
             ",
@@ -331,10 +326,6 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         self.quant_float_dtype = quant_float_dtype
         LOG(__LOG_LEVEL_TO_MUCH__, f"BatchNorm2d.__init__: self.quant_float_dtype", self.quant_float_dtype)
 
-        self.activation = fused_activation
-        LOG(__LOG_LEVEL_TO_MUCH__, f"BatchNorm2d.__init__: self.activation", self.activation)
-
-
     def get_weight_factor(self):
         """
         get_weight_factor Returns a function to calculate alpha with a singe value
@@ -365,12 +356,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                 x = super().forward(x)
             LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post super().forward", x)
 
-            if self.activation!=None:
-                LOG(__LOG_LEVEL_HIGH_DETAIL__, "BatchNorm2d.forward: fused activation function", x)
-                x = self.activation(x)
-                x = self.out_quant(x,min = self.activation.min,max = self.activation.max)
-            else : 
-                 x = self.out_quant(x)
+            x = self.out_quant(x)
             LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post quant", x)
             return x, rexp
 

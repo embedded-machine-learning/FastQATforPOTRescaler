@@ -9,7 +9,7 @@ from torchvision.models._utils  import _ovewrite_named_param
 
 from .convolution   import Conv2d
 from .batchnorm     import BatchNorm2d
-from .activations   import PACT_fused, ReLU
+from .activations   import PACT_fused, PACT_fused_2, ReLU
 from .layer         import AddQAT, MaxPool2d, Start, Stop, AdaptiveAvgPool2d, Flatten
 from .Linear        import Linear
 
@@ -92,7 +92,7 @@ class BasicBlock(nn.Module):
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = norm_layer(planes,fused_activation=PACT_fused((1,planes,1,1)))
+        self.bn1 = norm_layer(planes,out_quant=PACT_fused_2(bits=8,size=(1,planes,1,1)))
         self.relu = ReLU(inplace=False)
         self.conv2 = conv3x3(planes, planes)
         self.bn2 = norm_layer(planes)
@@ -144,9 +144,9 @@ class Bottleneck(nn.Module):
         width = int(planes * (base_width / 64.0)) * groups
         # Both self.conv2 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv1x1(inplanes, width)
-        self.bn1 = norm_layer(width,fused_activation=PACT_fused((1,width,1,1)))
+        self.bn1 = norm_layer(width,out_quant=PACT_fused_2(bits=8,size=(1,width,1,1)))
         self.conv2 = conv3x3(width, width, stride, groups, dilation)
-        self.bn2 = norm_layer(width,fused_activation=PACT_fused((1,width,1,1)))
+        self.bn2 = norm_layer(width,out_quant=PACT_fused_2(bits=8,size=(1,width,1,1)))
         self.conv3 = conv1x1(width, planes * self.expansion)
         self.bn3 = norm_layer(planes * self.expansion)
         self.relu = ReLU(inplace=False)
@@ -213,7 +213,7 @@ class ResNet(nn.Module):
         self.groups = groups
         self.base_width = width_per_group
         self.conv1 = Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False,weight_quant_bits=8,weight_quant_channel_wise=True)
-        self.bn1 = norm_layer(self.inplanes,fused_activation=PACT_fused((1,self.inplanes,1,1)))
+        self.bn1 = norm_layer(self.inplanes,out_quant=PACT_fused_2(bits=8,size=(1,self.inplanes,1,1)))
         # self.relu = ReLU(inplace=False)
         self.maxpool = MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
