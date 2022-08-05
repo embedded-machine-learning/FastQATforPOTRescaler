@@ -419,7 +419,7 @@ class AddQAT(nn.Module):
 
     def __init__(
         self,
-        num_features: int,
+        num_features: int=0,
         out_quant=None,
         out_quant_bits: int = 8,
         out_quant_channel_wise: bool = False,
