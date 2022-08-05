@@ -189,10 +189,10 @@ class PACT_fused_2(Quant):
         self.take_new = True
         self.mom1 = mom1
         assert self.bits > 0
-        self.register_buffer("delta_in_factor", torch.tensor(2.0 / (2.0**self.bits - 1)))
-        self.register_buffer("delta_out_factor", torch.tensor(2.0 / (2.0**self.bits - 1)))
+        self.register_buffer("delta_in_factor", torch.tensor(1.0 / (2.0**self.bits - 1)))
+        self.register_buffer("delta_out_factor", torch.tensor(1.0 / (2.0**self.bits - 1)))
 
-        self.register_buffer("max", torch.tensor(2 ** (self.bits - 1) - 1))
+        self.register_buffer("max", torch.tensor(2 ** (self.bits) - 1))
         self.register_buffer("min", torch.tensor(0))
 
         self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones(size)))
