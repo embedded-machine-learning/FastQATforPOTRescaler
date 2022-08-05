@@ -78,7 +78,7 @@ class LinQuantWeight(Quant):
         self.register_buffer("min", torch.tensor(-(2 ** (self.bits - 1) - 1)))
         LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: min buffer", self.min)
 
-    def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
         """
         forward Does the quantization, if :cvar:`self.training` returns floats else ints
 

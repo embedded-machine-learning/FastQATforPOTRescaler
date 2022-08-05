@@ -107,9 +107,10 @@ class PACT(nn.Module):
         val, rexp = invals
         if self.training:
             out = 0.5 * (val.abs() - (val - self.alpha).abs() + self.alpha)
-            return out,rexp
+            return out, rexp
         else:
-            return val.clamp(min=0),rexp
+            return val.clamp(min=0), rexp
+
 
 class FusedActivation(nn.Module):
     """
@@ -120,12 +121,15 @@ class FusedActivation(nn.Module):
     :param size: the shape of the minimum and maximum, defaults to (1,)
     :type size: tuple
     """
-    def __init__(self,size = (1,)) -> None:
-        super(FusedActivation,self).__init__()
-        self.register_buffer("min",torch.zeros(size))
-        self.register_buffer("max",torch.zeros(size))
-    def forward(self,args):
+
+    def __init__(self, size=(1,)) -> None:
+        super(FusedActivation, self).__init__()
+        self.register_buffer("min", torch.zeros(size))
+        self.register_buffer("max", torch.zeros(size))
+
+    def forward(self, args):
         raise NotImplementedError()
+
 
 class PACT_fused(FusedActivation):
     """
@@ -138,7 +142,7 @@ class PACT_fused(FusedActivation):
     :type size: tuple, optional
     """
 
-    def __init__(self, size = (1,)) -> None:
+    def __init__(self, size=(1,)) -> None:
         LOG(
             __LOG_LEVEL_DEBUG__,
             f"PACT arguments passed:\n\
@@ -148,15 +152,32 @@ class PACT_fused(FusedActivation):
         super(PACT_fused, self).__init__(size)
         self.size = size
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: self.size", self.size)
-        self.register_parameter("alpha", torch.nn.Parameter(6*torch.ones(size)))
+        self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones(size)))
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
 
         self.min = torch.zeros(size)
 
     def forward(self, val: Tensor) -> Tensor:
         assert self.training
-        self.max = self.alpha.detach()
-        out = 0.5 * (val.abs() - (val - self.alpha).abs() + self.alpha)
-        return out
-       
+        return PACT_function.apply(val,self.min,self.alpha)
 
+    # def forward(self, val: Tensor) -> Tensor:
+    #     assert self.training
+    #     self.max = self.alpha.detach()
+    #     out = 0.5 * (val.abs() - (val - self.alpha).abs() + self.alpha)
+    #     return out
+
+
+
+class PACT_function(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, val: Tensor, min:Tensor,alpha: Tensor) -> Tensor:
+        ctx.save_for_backward(val>=alpha)
+        val.clamp_(min=min,max=alpha)
+        return val
+
+    @staticmethod
+    def backward(ctx, grad_outputs: Tensor) -> Tuple[Tensor,Tensor]:
+        alpha_cmp, = ctx.saved_tensors
+        alpha_grad = grad_outputs*alpha_cmp
+        return grad_outputs,None,alpha_grad
