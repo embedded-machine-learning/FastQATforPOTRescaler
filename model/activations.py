@@ -157,15 +157,15 @@ class PACT_fused(FusedActivation):
 
         self.min = torch.zeros(size)
 
-    # def forward(self, val: Tensor) -> Tensor:
-    #     assert self.training
-    #     return PACT_function.apply(val,self.min,self.alpha)
-
     def forward(self, val: Tensor) -> Tensor:
         assert self.training
-        self.max = self.alpha.detach()
-        out = 0.5 * (val.abs() - (val - self.alpha).abs() + self.alpha)
-        return out
+        return PACT_function.apply(val,self.min,self.alpha)
+
+    # def forward(self, val: Tensor) -> Tensor:
+    #     assert self.training
+    #     self.max = self.alpha.detach()
+    #     out = 0.5 * (val.abs() - (val - self.alpha).abs() + self.alpha)
+    #     return out
 
 
 class PACT_fused2(FusedActivation):
