@@ -157,6 +157,43 @@ class PACT_fused(FusedActivation):
 
         self.min = torch.zeros(size)
 
+    # def forward(self, val: Tensor) -> Tensor:
+    #     assert self.training
+    #     return PACT_function.apply(val,self.min,self.alpha)
+
+    def forward(self, val: Tensor) -> Tensor:
+        assert self.training
+        self.max = self.alpha.detach()
+        out = 0.5 * (val.abs() - (val - self.alpha).abs() + self.alpha)
+        return out
+
+
+class PACT_fused2(FusedActivation):
+    """
+    PACT The implementation of the PACT activation function
+
+    This is the implementation of the PACT activation function from `https://openreview.net/forum?id=By5ugjyCb`
+    The fused part implicates, that is used inside the bn prior to quantizing, ans will never be called in the quantized domain
+
+    :param size: The shape for alpha, defaults to (1,)
+    :type size: tuple, optional
+    """
+
+    def __init__(self, size=(1,)) -> None:
+        LOG(
+            __LOG_LEVEL_DEBUG__,
+            f"PACT arguments passed:\n\
+            size:                           {size}\n\
+            ",
+        )
+        super(PACT_fused2, self).__init__(size)
+        self.size = size
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: self.size", self.size)
+        self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones(size)))
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
+
+        self.min = torch.zeros(size)
+
     def forward(self, val: Tensor) -> Tensor:
         assert self.training
         return PACT_function.apply(val,self.min,self.alpha)
@@ -173,7 +210,7 @@ class PACT_function(torch.autograd.Function):
     @staticmethod
     def forward(ctx, val: Tensor, min:Tensor,alpha: Tensor) -> Tensor:
         ctx.save_for_backward(val>=alpha,val>0)
-        val.clamp_(min=min,max=alpha)
+        val = val.clamp(min=min,max=alpha)
         return val
 
     @staticmethod
