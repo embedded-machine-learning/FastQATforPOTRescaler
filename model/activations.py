@@ -172,12 +172,13 @@ class PACT_fused(FusedActivation):
 class PACT_function(torch.autograd.Function):
     @staticmethod
     def forward(ctx, val: Tensor, min:Tensor,alpha: Tensor) -> Tensor:
-        ctx.save_for_backward(val>=alpha)
+        ctx.save_for_backward(val>=alpha,val>0)
         val.clamp_(min=min,max=alpha)
         return val
 
     @staticmethod
     def backward(ctx, grad_outputs: Tensor) -> Tuple[Tensor,Tensor]:
-        alpha_cmp, = ctx.saved_tensors
+        alpha_cmp,zero_cmp = ctx.saved_tensors
+        val_gard = grad_outputs*zero_cmp*(~alpha_cmp)
         alpha_grad = grad_outputs*alpha_cmp
-        return grad_outputs,None,alpha_grad
+        return val_gard,None,alpha_grad
