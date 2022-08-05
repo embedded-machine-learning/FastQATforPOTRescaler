@@ -198,13 +198,6 @@ class PACT_fused_2(Quant):
         self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones(size)))
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
 
-
-    def forward(self, val: Tensor) -> Tensor:
-        assert self.training
-        self.max = self.alpha.detach()
-        out = 0.5 * (val.abs() - (val - self.alpha).abs() + self.alpha)
-        return out
-
     def forward(self, x: torch.Tensor):
         if self.training:
             with torch.no_grad():
