@@ -148,7 +148,7 @@ class PACT_fused(FusedActivation):
         super(PACT_fused, self).__init__(size)
         self.size = size
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: self.size", self.size)
-        self.register_parameter("alpha", torch.nn.Parameter(torch.ones(size)))
+        self.register_parameter("alpha", torch.nn.Parameter(6*torch.ones(size)))
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
 
         self.min = torch.zeros(size)
