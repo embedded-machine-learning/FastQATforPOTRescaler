@@ -400,8 +400,8 @@ class Conv2d(nn.Conv2d):
                 delta_in=self.out_quant.delta_in.view(-1),
                 delta_out=self.out_quant.delta_out.view(-1),
                 training=self.training,
-                min_quant=self.out_quant.min,
-                max_quant=self.out_quant.max,
+                min_quant=self.out_quant.min.view(-1),
+                max_quant=self.out_quant.max.view(-1),
                 rounding_mode=self.out_quant.rounding_mode,
                 quant_int_dtype=self.out_quant.quant_int_dtype,
             )

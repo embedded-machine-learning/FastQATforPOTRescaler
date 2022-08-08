@@ -47,7 +47,7 @@ class BottleneckQAT(nn.Module):
         self.cv1 = ConvQAT(c1, c_, 1, 1)
         self.cv2 = ConvQAT(c_, c2, 3, 1, g=g)
         self.add = shortcut and c1 == c2
-        self.AddQAT = AddQAT(num_features= c1,out_quant_bits=8,out_quant_channel_wise=True)
+        self.AddQAT = AddQAT(size=(1,c1,1,1),out_quant_bits=8,out_quant_channel_wise=True)
 
     def forward(self, x):
         # print("BottleneckQAT")
