@@ -353,7 +353,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
 
         if self.training:
             if __HIGH_PRES__:
-                xorig = x.detach().clone()
+                xorig = x.data.clone().detach()
 
             if x.dtype == self.quant_int_dtype:
                 x = super().forward(x.type(self.quant_float_dtype))
@@ -367,21 +367,26 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             else:
                 x = self.out_quant(x,True)
                 with torch.no_grad():
+                    mu = x.mean([0, 2, 3])
+                    var = x.var([0, 2, 3], unbiased=False)
+
+                    # mu = self.running_mean.clone()
+                    # var = self.running_var.clone()
 
                     n = self.weight.abs().view(-1)/ (self.out_quant.delta_in.view(-1) * torch.sqrt(self.running_var.view(-1) + self.eps))
                     nr = self.func_n(
                         weight=torch.abs(self.weight.view(-1)),
                         bias=self.bias.view(-1),
-                        mean=self.running_mean.view(-1),
-                        var=self.running_var.view(-1),
+                        mean=mu.view(-1),
+                        var=var.view(-1),
                         out_quant=self.out_quant.delta_in.view(-1),
                         rexp=rexp.view(-1),
                     )
                     t = self.func_t(
                         weight=self.weight.view(-1),
                         bias=self.bias.view(-1),
-                        mean=self.running_mean.view(-1),
-                        var=self.running_var.view(-1),
+                        mean=mu.view(-1),
+                        var=var.view(-1),
                         out_quant=self.out_quant.delta_in.view(-1),
                         rexp=rexp.view(-1),
                         n=nr.view(-1),
@@ -392,7 +397,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                     t = t.mul(nr.exp2())
 
                     xorig = xorig.mul_(n.view(1,-1,1,1)).add_(t.view(1,-1,1,1)).floor_().clamp_(min=self.out_quant.min,max=self.out_quant.max).mul_(self.out_quant.delta_out)
-                    x.data = xorig
+                x.data = xorig
 
             rexp = torch.log2(self.out_quant.delta_out)
             return x, rexp

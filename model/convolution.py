@@ -281,10 +281,10 @@ class Conv2d(nn.Conv2d):
 
         self.register_buffer("quant_weight", torch.zeros_like(self.weight))
         LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: quant_weight buffer", self.quant_weight)
-        self.register_buffer("n", torch.zeros((out_channels if out_quant_channel_wise else 1)))
+        self.register_buffer("n", torch.zeros(((1,out_channels,1,1) if out_quant_channel_wise else 1)))
         LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: n buffer", self.n)
         if bias:
-            self.register_buffer("t", torch.zeros((out_channels)))
+            self.register_buffer("t", torch.zeros(((1,out_channels,1,1) if out_quant_channel_wise else 1)))
         else:
             self.t = None
         LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: t buffer", self.t)
@@ -420,12 +420,13 @@ class Conv2d(nn.Conv2d):
             LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward self.t", self.t)
 
             self.quant_weight = weight.detach()
-            self.n = self.calculate_n(
-                self.weight_quant.delta_out.view(-1).detach(),
-                2 ** rexp_mean.view(-1).detach(),
-                self.out_quant.delta_in.view(-1).detach(),
-            ).view(1, -1, 1, 1)
-            LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward self.n", self.n)
+            if factor_fun==None:
+                self.n = self.calculate_n(
+                    self.weight_quant.delta_out.view(-1).detach(),
+                    2 ** rexp_mean.view(-1).detach(),
+                    self.out_quant.delta_in.view(-1).detach(),
+                ).view(1, -1, 1, 1)
+                LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward self.n", self.n)
 
         if self.training:
             out = self._conv_forward(input, weight, bias)

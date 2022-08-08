@@ -236,7 +236,7 @@ class Quant(nn.Module):
     :type quant_int_dtype: torch.dtype, optional
     """
 
-    def __init__(self, bits,size=Tuple, rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
+    def __init__(self, bits,size=(-1,), rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
         super(Quant, self).__init__()
         LOG(
             __LOG_LEVEL_DEBUG__,
@@ -280,9 +280,9 @@ class Quant(nn.Module):
         self.quant_int_dtype = quant_int_dtype
         LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: quant_int_dtype", self.quant_int_dtype)
 
-        self.register_buffer("max", torch.tensor(2 ** (self.bits - 1) - 1))
+        self.register_buffer("max", torch.ones(self.size)*(2 ** (self.bits - 1) - 1))
         LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: buffer max", self.max)
-        self.register_buffer("min", torch.tensor(-(2 ** (self.bits - 1))))
+        self.register_buffer("min", torch.ones(self.size)*(-(2 ** (self.bits - 1))))
         LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: buffer min", self.min)
 
     def forward(self, x:Tensor, fake:bool = False):
@@ -338,9 +338,6 @@ class LinQuantExpScale(Quant):
         assert self.bits > 0
         self.register_buffer("delta_in_factor", torch.tensor(2.0 / (2.0**self.bits - 1)))
         self.register_buffer("delta_out_factor", torch.tensor(2.0 / (2.0**self.bits - 1)))
-
-        self.register_buffer("max", torch.tensor(2 ** (self.bits - 1) - 1))
-        self.register_buffer("min", torch.tensor(-(2 ** (self.bits - 1))))
 
     def forward(self, x: torch.Tensor, fake:bool = False):
         if self.training:

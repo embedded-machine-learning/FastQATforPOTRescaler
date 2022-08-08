@@ -245,10 +245,10 @@ class Linear(nn.Linear):
 
         self.register_buffer("quant_weight", torch.zeros_like(self.weight))
         LOG(__LOG_LEVEL_TO_MUCH__, f"Linear.__init__: buffer quant_weight", self.quant_weight)
-        self.register_buffer("n", torch.zeros((out_features if out_quant_channel_wise else 1)))
+        self.register_buffer("n", torch.zeros(((1,out_features) if out_quant_channel_wise else 1)))
         LOG(__LOG_LEVEL_TO_MUCH__, f"Linear.__init__: buffer n", self.n)
         if bias:
-            self.register_buffer("t", torch.zeros((out_features)))
+            self.register_buffer("t", torch.zeros((1,out_features)))
         else:
             self.t = None
         LOG(__LOG_LEVEL_TO_MUCH__, f"Linear.__init__: buffer t", self.t)

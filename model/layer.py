@@ -123,12 +123,13 @@ class Stop(nn.Module):
     Stop Return a Tensor pair from the fake-quantized/quantized domain
     """
 
-    def __init__(self) -> None:
+    def __init__(self,size=(1,)) -> None:
         """
         Please read Class help
         """
         super(Stop, self).__init__()
-        self.register_buffer("exp", torch.zeros(1))
+        self.size = size
+        self.register_buffer("exp", torch.zeros(self.size))
         LOG(__LOG_LEVEL_TO_MUCH__, "Stop.__init: buffer exp", self.exp)
         self.register_buffer("for_dtype", torch.zeros(1))  # Only required to know the current datatype
         LOG(__LOG_LEVEL_TO_MUCH__, "Stop.__init: buffer for_dtype", self.for_dtype)
@@ -419,7 +420,7 @@ class AddQAT(nn.Module):
 
     def __init__(
         self,
-        num_features: int=0,
+        size=(1,),
         out_quant=None,
         out_quant_bits: int = 8,
         out_quant_channel_wise: bool = False,
@@ -430,7 +431,7 @@ class AddQAT(nn.Module):
         LOG(
             __LOG_LEVEL_DEBUG__,
             f"AddQAT passed arguments:\n\
-            num_features:                   {num_features}\n\
+            size:                           {size}\n\
             out_quant:                      {out_quant}\n\
             out_quant_bits:                 {out_quant_bits}\n\
             out_quant_channel_wise:         {out_quant_channel_wise}\n\
@@ -441,15 +442,15 @@ class AddQAT(nn.Module):
         )
         super(AddQAT, self).__init__()
 
-        self.register_buffer("a_shift", torch.Tensor([0.0]))
+        self.register_buffer("a_shift", torch.zeros(size))
         LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.__init__: buffer a_shift", self.a_shift)
-        self.register_buffer("b_shift", torch.Tensor([0.0]))
+        self.register_buffer("b_shift", torch.zeros(size))
         LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.__init__: buffer b_shift", self.b_shift)
 
         if out_quant_args == None:
             out_quant_args = (
                 out_quant_bits,
-                (-1,) if not out_quant_channel_wise else (1, num_features, 1, 1),
+                (-1,) if not out_quant_channel_wise else size,
                 0.1,
                 "floor",
                 quant_int_dtype,

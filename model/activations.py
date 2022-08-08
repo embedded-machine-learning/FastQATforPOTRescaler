@@ -192,11 +192,10 @@ class PACT_fused_2(Quant):
         self.register_buffer("delta_in_factor", torch.tensor(1.0 / (2.0**self.bits - 1)))
         self.register_buffer("delta_out_factor", torch.tensor(1.0 / (2.0**self.bits - 1)))
 
-        self.register_buffer("max", torch.tensor(2 ** (self.bits) - 1))
-        self.register_buffer("min", torch.tensor(0))
-
         self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones(size)))
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
+        nn.init.constant_(self.min,0)
+        nn.init.constant_(self.max,2**bits-1)
 
     def forward(self, x: torch.Tensor,fake:bool = False):
         if self.training:

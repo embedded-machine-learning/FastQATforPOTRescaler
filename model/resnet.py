@@ -98,7 +98,7 @@ class BasicBlock(nn.Module):
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
         self.stride = stride
-        self.add = AddQAT(out_quant=PACT_fused_2(bits=8,size=(1,planes,1,1)))
+        self.add = AddQAT(size=(1,planes,1,1),out_quant=PACT_fused_2(bits=8,size=(1,planes,1,1)))
 
     def forward(self, x: Tuple[torch.Tensor,torch.Tensor]) -> Tuple[torch.Tensor,torch.Tensor]:
         identity = x
@@ -153,7 +153,7 @@ class Bottleneck(nn.Module):
         # self.relu = ReLU(inplace=False)
         self.downsample = downsample
         self.stride = stride
-        self.add = AddQAT(out_quant=PACT_fused_2(bits=8,size=(1,planes * self.expansion,1,1)))
+        self.add = AddQAT(size=(1,planes * self.expansion,1,1),out_quant=PACT_fused_2(bits=8,size=(1,planes * self.expansion,1,1)))
 
     def forward(self, x: Tuple[torch.Tensor,torch.Tensor]) -> Tuple[torch.Tensor,torch.Tensor]:
         identity = x
@@ -226,7 +226,7 @@ class ResNet(nn.Module):
         self.fc = Linear(512 * block.expansion, num_classes,weight_quant_channel_wise=True,out_quant_channel_wise=True,out_quant_bits=16)
 
         self.start = Start(8)
-        self.stop = Stop()
+        self.stop = Stop((1,num_classes))
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
