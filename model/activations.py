@@ -201,11 +201,11 @@ class PACT_fused_2(Quant):
     def forward(self, x: torch.Tensor,fake:bool = False):
         if self.training:
             with torch.no_grad():
-                abs = get_abs(self, x)
+                # abs = get_abs(self, x)
                 # print(abs)
-                self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
+                # self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
 
-                abs = self.alpha.clamp(max=self.abs).log2().ceil().exp2()
+                abs = self.alpha.log2().ceil().exp2()
                 self.delta_in = abs.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
                 self.delta_out = abs.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
 
