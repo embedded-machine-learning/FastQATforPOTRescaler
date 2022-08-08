@@ -367,11 +367,8 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             else:
                 x = self.out_quant(x,True)
                 with torch.no_grad():
-                    mu = x.mean([0, 2, 3])
-                    var = x.var([0, 2, 3], unbiased=False)
-
-                    # mu = self.running_mean.clone()
-                    # var = self.running_var.clone()
+                    mu = self.running_mean.clone()
+                    var = self.running_var.clone()
 
                     n = self.weight.abs().view(-1)/ (self.out_quant.delta_in.view(-1) * torch.sqrt(self.running_var.view(-1) + self.eps))
                     nr = self.func_n(

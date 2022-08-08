@@ -19,6 +19,7 @@ from .activations import LeakReLU
 
 # Global information imports
 from . import (
+    __HIGH_PRES__,
     __DEBUG__,
     LOG,
     __LOG_LEVEL_IMPORTANT__,
@@ -123,7 +124,7 @@ class Stop(nn.Module):
     Stop Return a Tensor pair from the fake-quantized/quantized domain
     """
 
-    def __init__(self,size=(1,)) -> None:
+    def __init__(self, size=(1,)) -> None:
         """
         Please read Class help
         """
@@ -473,12 +474,20 @@ class AddQAT(nn.Module):
             LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: out post quant", out)
             rexp = self.out_quant.delta_out.log2()
             LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: rexp", rexp)
+            if __HIGH_PRES__:
+                with torch.no_grad():
+                    va = a[0].div(rexp.exp2()).floor()
+                    vb = b[0].div(rexp.exp2()).floor()
+                    out2 = va + vb
+                    out2 = out2.clamp(self.out_quant.min, self.out_quant.max)
+                    out2 = out2.mul(rexp.exp2())
+                    out = out2
         else:
             rexp = self.out_quant.delta_out.log2()
             LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: rexp", rexp)
-            self.a_shift = -(a[1] - rexp).detach()
+            self.a_shift = (rexp - a[1]).detach()
             LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: self.a_shift", self.a_shift)
-            self.b_shift = -(b[1] - rexp).detach()
+            self.b_shift = (rexp - b[1]).detach()
             LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: self.b_shift", self.b_shift)
             va = a[0].div(self.a_shift.exp2(), rounding_mode="floor")
             LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: va", va)

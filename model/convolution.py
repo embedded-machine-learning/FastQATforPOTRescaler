@@ -340,8 +340,6 @@ class Conv2d(nn.Conv2d):
             LOG(__LOG_LEVEL_TO_MUCH__, f"Conv2dQuant.calculate_n: pre ceil(log()) n", n)
             n = torch.log2(n)
             LOG(__LOG_LEVEL_TO_MUCH__, f"Conv2dQuant.calculate_n: pre ceil() n", n)
-            if __DEBUG__:
-                self.debug_n = n.clone()
             nr = torch.ceil(n)
             LOG(__LOG_LEVEL_HIGH_DETAIL__, f"Conv2dQuant.calculate_n: nr", nr)
         return nr
@@ -407,11 +405,6 @@ class Conv2d(nn.Conv2d):
             )
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward bias", bias)
 
-        if __DEBUG__:
-            self.debug_fact = fact
-            self.debug_weight = weight
-            self.debug_bias = bias
-
         if not self.training:
             if bias != None:
                 self.t = bias.detach().view(1, -1, 1, 1)
@@ -427,6 +420,12 @@ class Conv2d(nn.Conv2d):
                     self.out_quant.delta_in.view(-1).detach(),
                 ).view(1, -1, 1, 1)
                 LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward self.n", self.n)
+
+        if __DEBUG__:
+            self.debug_fact = fact
+            self.debug_weight = weight
+            self.debug_bias = bias
+            self.debug_n = self.n.clone()
 
         if self.training:
             out = self._conv_forward(input, weight, bias)
