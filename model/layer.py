@@ -481,7 +481,7 @@ class AddQAT(nn.Module):
                     out2 = va + vb
                     out2 = out2.clamp(self.out_quant.min, self.out_quant.max)
                     out2 = out2.mul(rexp.exp2())
-                    out = out2
+                out.data = out2
         else:
             rexp = self.out_quant.delta_out.log2()
             LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: rexp", rexp)
