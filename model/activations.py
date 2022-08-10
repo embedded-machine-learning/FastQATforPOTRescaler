@@ -194,6 +194,8 @@ class PACT_fused_2(Quant):
 
         self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones(size)))
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
+        self.register_buffer("alpha_used", torch.zeros_like(self.alpha))
+
         nn.init.constant_(self.min,0)
         nn.init.constant_(self.max,2**bits-1)
 
@@ -203,16 +205,15 @@ class PACT_fused_2(Quant):
                 # abs = get_abs(self, x)
                 # print(abs)
                 # self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
-
-                abs = self.alpha.log2().ceil().exp2()
+                self.alpha_used = self.alpha.clamp(min = 1e-3)  # block 2 small and negative alpha
+                abs = self.alpha_used.log2().ceil().exp2()
                 self.delta_in = abs.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
                 self.delta_out = abs.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
 
-                self.max = self.alpha.div(self.delta_in,rounding_mode = self.rounding_mode)
+                self.max = self.alpha.div(self.delta_in,rounding_mode = self.rounding_mode).clamp(min=0)
 
             x = PACT_back_function.apply(x,self.alpha)
         return super().forward(x,fake)
-
 
 class PACT_function(torch.autograd.Function):
     @staticmethod

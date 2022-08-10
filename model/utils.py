@@ -35,18 +35,26 @@ import numpy as np
 class checkNan(torch.autograd.Function):
     @staticmethod
     def forward(self, in1,place=None):
-        with torch.no_grad():
-            if in1.isnan().any():
-                print("check nan forward nan",place)
+        # print("hello from checkNan")
+        # with torch.no_grad():
+        if in1.isnan().any():
+            print("check nan forward nan",place)
         return in1
 
     @staticmethod
     def backward(self, out: torch.Tensor):
-        with torch.no_grad():
-            if out.isnan().any():
-                print("check nan backward nan:",torch.sum(torch.isnan(out)))
-                # print(out)
-                # npdata = out.view(-1).cpu().detach().numpy()
-                # np.savetxt("checkNanvalue.txt",npdata)
-            out = out.masked_fill_(torch.isnan(out),0)
+        # print("hello from checkNan backwards")
+        # with torch.no_grad():
+        if out.isnan().any():
+            print("check nan backward nan:",torch.sum(torch.isnan(out)))
+            # print(out)
+            # npdata = out.view(-1).cpu().detach().numpy()
+            # np.savetxt("checkNanvalue.txt",npdata)
+            out = out.nan_to_num()
         return out, None
+
+        
+def checkNanTuple(inputs,pos):
+    val , rexp = inputs
+    val = checkNan.apply(val,pos)
+    return val,rexp

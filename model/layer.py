@@ -11,6 +11,8 @@ from torch.nn.common_types import _size_any_t, _size_2_t, Tensor, _size_any_opt_
 # Numpy
 import numpy as np
 
+from .utils import checkNan
+
 # current module imports
 from .quantizer import FakeQuant, LinQuantExpScale
 from .convolution import Conv2d
@@ -469,8 +471,13 @@ class AddQAT(nn.Module):
             raise torch.ErrorReport("testW")
         if self.training:
             out = a[0] + b[0]
+            # checkNan.apply(a[0],"AddQAT a[0]")
+            # checkNan.apply(b[0],"AddQAT b[0]")
+            # out = checkNan.apply(out,"AddQAT out")
+
             LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: out", out)
-            out = self.out_quant(out.clone())
+            out = self.out_quant(out,__HIGH_PRES__)
+            # out = checkNan.apply(out,"AddQAT out post quant")
             LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: out post quant", out)
             rexp = self.out_quant.delta_out.log2()
             LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: rexp", rexp)
