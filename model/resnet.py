@@ -309,7 +309,7 @@ class ResNet(nn.Module):
 
     def _forward_impl(self, x: torch.Tensor) -> torch.Tensor:
         # See note [TorchScript super()]
-
+        x = x-0.5           # make symetric input 
         x = self.start(x)
 
         
