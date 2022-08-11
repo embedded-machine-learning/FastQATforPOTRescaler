@@ -320,9 +320,6 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             self.out_quant = out_quant
         LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.__init__: self.out_quant", self.out_quant)
 
-        self.register_buffer("weight_sign", torch.ones(num_features))
-        LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.__init__: buffer weight_sign", self.weight_sign)
-
         self.quant_int_dtype = quant_int_dtype
         LOG(__LOG_LEVEL_TO_MUCH__, f"BatchNorm2d.__init__: self.quant_int_dtype", self.quant_int_dtype)
         self.quant_float_dtype = quant_float_dtype

@@ -12,6 +12,7 @@ from .batchnorm     import BatchNorm2d
 from .activations   import PACT_fused, PACT_fused_2, ReLU
 from .layer         import AddQAT, MaxPool2d, Start, Stop, AdaptiveAvgPool2d, Flatten
 from .Linear        import Linear
+from .utils         import checkNan, checkNanTuple
 
 ####################################################################################
 # This is mostly copied and modivied from torchvision/jmodels/resnet.py
@@ -36,7 +37,6 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
         out_quant_channel_wise=True
     )
 
-
 def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> Conv2d:
     """1x1 convolution"""
     return Conv2d(
@@ -51,6 +51,12 @@ def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> Conv2d:
         out_quant_channel_wise=True
     )
 
+def ADDwPACT(planes:int):
+    return AddQAT(
+        size=(1,planes,1,1),
+        out_quant=PACT_fused_2(bits=8,size=(1,planes,1,1)),
+        )
+
 class Downsample_Block(nn.Module):
     def __init__(self,inplanes,planes,expansion,stride) -> None:
         super().__init__()
@@ -63,9 +69,12 @@ class Downsample_Block(nn.Module):
         self.bn     = BatchNorm2d(planes * expansion)
 
     def forward(self,x):
+        # x = checkNanTuple(x,"Downsample in")
         fact1 = self.bn.get_weight_factor()
         x = self.conv(x,fact1)
+        # x = checkNanTuple(x,"Downsample middle")
         x = self.bn(x)
+        # x = checkNanTuple(x,"Downsample out")
         return x
 
 
@@ -98,22 +107,31 @@ class BasicBlock(nn.Module):
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
         self.stride = stride
-        self.add = AddQAT(size=(1,planes,1,1),out_quant=PACT_fused_2(bits=8,size=(1,planes,1,1)))
+        self.add = ADDwPACT(planes)
 
     def forward(self, x: Tuple[torch.Tensor,torch.Tensor]) -> Tuple[torch.Tensor,torch.Tensor]:
         identity = x
+        # x = checkNanTuple(x,"BasicBlock in")
+
+
         fact1 = self.bn1.get_weight_factor()
         out = self.conv1(x,fact1)
         out = self.bn1(out)
         # relu is fused into BN
+        # out = checkNanTuple(out,"BasicBlock post first bn")
+
 
         fact2 = self.bn2.get_weight_factor()
         out = self.conv2(out,fact2)
         out = self.bn2(out)
+        # out = checkNanTuple(out,"BasicBlock post second bn")
+        
         if self.downsample is not None:
             identity = self.downsample(x)
 
+        # identity = checkNanTuple(identity,"BasicBlock identity")
         out = self.add(out,identity)
+        # out = checkNanTuple(out,"BasicBlock post add")
         # out = self.relu(out)
         # relu fused into add
         return out
@@ -153,30 +171,36 @@ class Bottleneck(nn.Module):
         # self.relu = ReLU(inplace=False)
         self.downsample = downsample
         self.stride = stride
-        self.add = AddQAT(size=(1,planes * self.expansion,1,1),out_quant=PACT_fused_2(bits=8,size=(1,planes * self.expansion,1,1)))
+        self.add = ADDwPACT(planes * self.expansion)
 
     def forward(self, x: Tuple[torch.Tensor,torch.Tensor]) -> Tuple[torch.Tensor,torch.Tensor]:
         identity = x
+        # x = checkNanTuple(x,"Bottleneck in")
 
         fact1 = self.bn1.get_weight_factor()
         out = self.conv1(x,fact1)
         out = self.bn1(out)
+        # out = checkNanTuple(out,"Bottleneck post first BN")
+
         # relu is fused into BN
 
 
         fact2 = self.bn2.get_weight_factor()
         out = self.conv2(out,fact2)
         out = self.bn2(out)
+        # out = checkNanTuple(out,"Bottleneck post second BN")
         # relu is fused into BN
 
         fact3 = self.bn3.get_weight_factor()
         out = self.conv3(out,fact3)
         out = self.bn3(out)
+        # out = checkNanTuple(out,"Bottleneck post third BN")
 
         if self.downsample is not None:
             identity = self.downsample(x)
 
         out = self.add(out,identity)
+        # out = checkNanTuple(out,"Bottleneck post add")
         # relu fused into add
 
         return out
@@ -293,11 +317,18 @@ class ResNet(nn.Module):
         x = self.conv1(x,fact1)
         x = self.bn1(x)
         # relu is fused into BN
+        # x = checkNanTuple(x,"forw. pre max pool")
         x = self.maxpool(x)
+        # x = checkNanTuple(x,"forw. post max pool")
         x = self.layer1(x)
-        x = self.layer2(x)
+        # x = checkNanTuple(x,"forw. post layer 1")
+        x = self.layer2(x)        
+        # x = checkNanTuple(x,"forw. post layer 2")
         x = self.layer3(x)
+        # x = checkNanTuple(x,"forw. post layer 3")
         x = self.layer4(x)
+        # x = checkNanTuple(x,"forw. post layer 4")
+
 
 
 
@@ -306,6 +337,8 @@ class ResNet(nn.Module):
         x = self.fc(x)
 
         x = self.stop(x)
+        x = checkNan.apply(x,"After stop")
+
 
         return x
 

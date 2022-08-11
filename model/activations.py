@@ -205,7 +205,8 @@ class PACT_fused_2(Quant):
                 # abs = get_abs(self, x)
                 # print(abs)
                 # self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
-                self.alpha_used = self.alpha.clamp(min = 1e-3)  # block 2 small and negative alpha
+                self.alpha_used = self.alpha.clone()  # block 2 small and negative alpha
+                self.alpha_used = self.alpha_used.clamp(min = 1e-3)  # block 2 small and negative alpha
                 abs = self.alpha_used.log2().ceil().exp2()
                 self.delta_in = abs.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
                 self.delta_out = abs.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
@@ -226,7 +227,7 @@ class PACT_function(torch.autograd.Function):
     def backward(ctx, grad_outputs: Tensor) -> Tuple[Tensor, Tensor]:
         alpha_cmp, zero_cmp = ctx.saved_tensors
         val_gard = grad_outputs * zero_cmp * (~alpha_cmp)
-        alpha_grad = grad_outputs * alpha_cmp
+        alpha_grad = grad_outputs * alpha_cmp * zero_cmp
         return val_gard, None, alpha_grad
 
 
@@ -240,5 +241,5 @@ class PACT_back_function(torch.autograd.Function):
     def backward(ctx, grad_outputs: Tensor) -> Tuple[Tensor, Tensor]:
         alpha_cmp, zero_cmp = ctx.saved_tensors
         val_gard = grad_outputs * zero_cmp * (~alpha_cmp)
-        alpha_grad = grad_outputs * alpha_cmp
+        alpha_grad = grad_outputs * alpha_cmp * zero_cmp
         return val_gard, alpha_grad
