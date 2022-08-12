@@ -9,7 +9,7 @@ from torchvision.models._utils  import _ovewrite_named_param
 
 from .convolution   import Conv2d
 from .batchnorm     import BatchNorm2d
-from .activations   import PACT_fused, PACT_fused_2, ReLU
+from .activations   import PACT_fused, PACT_fused_2, ReLU, ReLU_fused
 from .layer         import AddQAT, MaxPool2d, Start, Stop, AdaptiveAvgPool2d, Flatten
 from .Linear        import Linear
 from .utils         import checkNan, checkNanTuple
@@ -59,7 +59,7 @@ def ADDwPACT(planes:int):
 def ADDwRELU(planes:int):
     return AddQAT(
         size=(1,planes,1,1),
-        out_quant=RELU_fused(bits=8,size=(1,planes,1,1)),
+        out_quant=ReLU_fused(bits=8,size=(1,planes,1,1)),
         )
 
 class Downsample_Block(nn.Module):
@@ -342,7 +342,7 @@ class ResNet(nn.Module):
         x = self.fc(x)
 
         x = self.stop(x)
-        x = checkNan.apply(x,"After stop")
+        # x = checkNan.apply(x,"After stop")
 
 
         return x
