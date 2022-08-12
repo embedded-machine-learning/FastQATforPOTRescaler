@@ -56,6 +56,11 @@ def ADDwPACT(planes:int):
         size=(1,planes,1,1),
         out_quant=PACT_fused_2(bits=8,size=(1,planes,1,1)),
         )
+def ADDwRELU(planes:int):
+    return AddQAT(
+        size=(1,planes,1,1),
+        out_quant=RELU_fused(bits=8,size=(1,planes,1,1)),
+        )
 
 class Downsample_Block(nn.Module):
     def __init__(self,inplanes,planes,expansion,stride) -> None:

@@ -81,6 +81,57 @@ class ReLU(nn.ReLU):
         return super().forward(x), rexp
 
 
+class ReLU_fused(Quant):
+    """
+    ReLU_fused The implementation of the ReLU activation function fused into the quantization
+
+    The fused part implicates, that is used instead of quantization
+
+    :param size: The shape for alpha, defaults to (1,)
+    :type size: tuple, optional
+    """
+    def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
+        super(ReLU_fused, self).__init__(bits,size, rounding_mode, quant_int_dtype)
+        self.bits = bits
+        if size == (-1,):
+            self.register_buffer("abs", torch.ones(1))
+        else:
+            self.register_buffer("abs", torch.ones(size))
+        self.take_new = True
+        self.mom1 = mom1
+        assert self.bits > 0
+        self.register_buffer("delta_in_factor", torch.tensor(1.0/70.0))
+        self.register_buffer("delta_out_factor", torch.tensor(1.0/70.0))
+
+        nn.init.constant_(self.min,0)
+        nn.init.constant_(self.max,2**bits-1)
+
+    def forward(self, x: torch.Tensor,fake:bool = False):
+        if self.training:
+            with torch.no_grad():
+                sigma = torch.var(x,[0,2,3],unbiased=False,keepdim=True).add(1e-5).sqrt()
+                
+                self.delta_in = sigma.mul(self.delta_in_factor).log2().floor().exp2().detach()  
+                self.delta_out = sigma.mul(self.delta_in_factor).log2().floor().exp2().detach()  
+
+            x = RELU_back_function.apply(x)
+        return super().forward(x,fake)
+
+
+
+class RELU_back_function(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, val: Tensor) -> Tensor:
+        ctx.save_for_backward(val > 0)
+        return val
+
+    @staticmethod
+    def backward(ctx, grad_outputs: Tensor) -> Tuple[Tensor, Tensor]:
+        zero_cmp = ctx.saved_tensors
+        val_gard = grad_outputs * zero_cmp 
+        return val_gard
+
+
 class PACT(nn.Module):
     """
     PACT The implementation of the PACT activation function
@@ -179,15 +230,9 @@ class PACT_fused_2(Quant):
     :param size: The shape for alpha, defaults to (1,)
     :type size: tuple, optional
     """
-    def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
+    def __init__(self, bits, size=(-1,), rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
         super(PACT_fused_2, self).__init__(bits,size, rounding_mode, quant_int_dtype)
         self.bits = bits
-        if size == (-1,):
-            self.register_buffer("abs", torch.ones(1))
-        else:
-            self.register_buffer("abs", torch.ones(size))
-        self.take_new = True
-        self.mom1 = mom1
         assert self.bits > 0
         self.register_buffer("delta_in_factor", torch.tensor(1.0 / (2.0**self.bits - 1)))
         self.register_buffer("delta_out_factor", torch.tensor(1.0 / (2.0**self.bits - 1)))
@@ -211,7 +256,7 @@ class PACT_fused_2(Quant):
                 self.delta_in = abs.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
                 self.delta_out = abs.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
 
-                self.max = self.alpha.div(self.delta_in,rounding_mode = self.rounding_mode).clamp(min=0)
+                self.max = self.alpha.div(self.delta_in,rounding_mode = self.rounding_mode).clamp(self.min)
 
             x = PACT_back_function.apply(x,self.alpha)
         return super().forward(x,fake)

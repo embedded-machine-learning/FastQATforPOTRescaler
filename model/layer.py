@@ -108,6 +108,7 @@ class Start(nn.Module):
 
     def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "Start.forward: x", x)
+        # print("min,max of input, should be -0.5,0.5",x.min(),x.max())
         x = FakeQuant(
             x.clone(),
             self.delta_in,
