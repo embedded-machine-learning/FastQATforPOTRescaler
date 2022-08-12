@@ -3,21 +3,23 @@ from typing import Tuple, Type, Any, Callable, Union, List, Optional
 import torch
 import torch.nn as nn
 
-from torchvision.utils          import _log_api_usage_once
-from torchvision.models._api    import WeightsEnum
-from torchvision.models._utils  import _ovewrite_named_param
+from torchvision.utils import _log_api_usage_once
+from torchvision.models._api import WeightsEnum
+from torchvision.models._utils import _ovewrite_named_param
 
-from .convolution   import Conv2d
-from .batchnorm     import BatchNorm2d
-from .activations   import PACT_fused, PACT_fused_2, ReLU, ReLU_fused
-from .layer         import AddQAT, MaxPool2d, Start, Stop, AdaptiveAvgPool2d, Flatten
-from .Linear        import Linear
-from .utils         import checkNan, checkNanTuple
+from model.quantizer import F8NetQuant
+
+from .convolution import Conv2d
+from .batchnorm import BatchNorm2d
+from .activations import PACT_fused, PACT_fused_2, PACT_fused_F8NET_mod, ReLU, ReLU_F8NET_fused
+from .layer import AddQAT, MaxPool2d, Start, Stop, AdaptiveAvgPool2d, Flatten
+from .Linear import Linear
+from .utils import checkNan, checkNanTuple
+from model import batchnorm
 
 ####################################################################################
 # This is mostly copied and modivied from torchvision/jmodels/resnet.py
 ####################################################################################
-
 
 
 def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> Conv2d:
@@ -34,49 +36,70 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
         weight_quant_bits=8,
         weight_quant_channel_wise=True,
         out_quant_bits=8,
-        out_quant_channel_wise=True
+        out_quant_channel_wise=True,
     )
+
 
 def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> Conv2d:
     """1x1 convolution"""
     return Conv2d(
-        in_planes, 
-        out_planes, 
-        kernel_size=1, 
-        stride=stride, 
+        in_planes,
+        out_planes,
+        kernel_size=1,
+        stride=stride,
         bias=False,
         weight_quant_bits=8,
         weight_quant_channel_wise=True,
         out_quant_bits=8,
-        out_quant_channel_wise=True
+        out_quant_channel_wise=True,
     )
 
-def ADDwPACT(planes:int):
+
+def ADDwPACT(planes: int):
     return AddQAT(
-        size=(1,planes,1,1),
-        out_quant=PACT_fused_2(bits=8,size=(1,planes,1,1)),
-        )
-def ADDwRELU(planes:int):
+        size=(1, planes, 1, 1),
+        out_quant=PACT_fused_2(bits=8, size=(1, planes, 1, 1)),
+    )
+
+
+def ADDwRELU(planes: int):
     return AddQAT(
-        size=(1,planes,1,1),
-        out_quant=ReLU_fused(bits=8,size=(1,planes,1,1)),
-        )
+        size=(1, planes, 1, 1),
+        out_quant=ReLU_F8NET_fused(bits=8, size=(1, planes, 1, 1)),
+    )
+
+
+def PACT_F8NET(features):
+    return PACT_fused_F8NET_mod(bits=8, size=(1, features, 1, 1))
+
+
+def F8NET_Quant(features):
+    return F8NetQuant(bits=8, size=(1, features, 1, 1))
+
+
+def default_Quant(features):
+    return F8NET_Quant(features)
+
+
+def default_fused_Activation(features):
+    return PACT_F8NET(features)
+
 
 class Downsample_Block(nn.Module):
-    def __init__(self,inplanes,planes,expansion,stride) -> None:
+    def __init__(self, inplanes, planes, expansion, stride) -> None:
         super().__init__()
-        self.inplanes   = inplanes
-        self.planes     = planes
-        self.expansion  = expansion
-        self.stride     = stride
+        self.inplanes = inplanes
+        self.planes = planes
+        self.expansion = expansion
+        self.stride = stride
 
-        self.conv   = conv1x1(inplanes,planes*expansion,stride)
-        self.bn     = BatchNorm2d(planes * expansion)
+        self.conv = conv1x1(inplanes, planes * expansion, stride)
+        self.bn = BatchNorm2d(planes * expansion, out_quant=default_Quant(planes * expansion))
 
-    def forward(self,x):
+    def forward(self, x):
         # x = checkNanTuple(x,"Downsample in")
         fact1 = self.bn.get_weight_factor()
-        x = self.conv(x,fact1)
+        x = self.conv(x, fact1)
         # x = checkNanTuple(x,"Downsample middle")
         x = self.bn(x)
         # x = checkNanTuple(x,"Downsample out")
@@ -106,36 +129,34 @@ class BasicBlock(nn.Module):
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = norm_layer(planes,out_quant=PACT_fused_2(bits=8,size=(1,planes,1,1)))
+        self.bn1 = norm_layer(planes, out_quant=default_fused_Activation(planes))
         # self.relu = ReLU(inplace=False)
         self.conv2 = conv3x3(planes, planes)
-        self.bn2 = norm_layer(planes)
+        self.bn2 = norm_layer(planes,out_quant=default_Quant(planes))
         self.downsample = downsample
         self.stride = stride
         self.add = ADDwPACT(planes)
 
-    def forward(self, x: Tuple[torch.Tensor,torch.Tensor]) -> Tuple[torch.Tensor,torch.Tensor]:
+    def forward(self, x: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         identity = x
         # x = checkNanTuple(x,"BasicBlock in")
 
-
         fact1 = self.bn1.get_weight_factor()
-        out = self.conv1(x,fact1)
+        out = self.conv1(x, fact1)
         out = self.bn1(out)
         # relu is fused into BN
         # out = checkNanTuple(out,"BasicBlock post first bn")
 
-
         fact2 = self.bn2.get_weight_factor()
-        out = self.conv2(out,fact2)
+        out = self.conv2(out, fact2)
         out = self.bn2(out)
         # out = checkNanTuple(out,"BasicBlock post second bn")
-        
+
         if self.downsample is not None:
             identity = self.downsample(x)
 
         # identity = checkNanTuple(identity,"BasicBlock identity")
-        out = self.add(out,identity)
+        out = self.add(out, identity)
         # out = checkNanTuple(out,"BasicBlock post add")
         # out = self.relu(out)
         # relu fused into add
@@ -168,43 +189,42 @@ class Bottleneck(nn.Module):
         width = int(planes * (base_width / 64.0)) * groups
         # Both self.conv2 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv1x1(inplanes, width)
-        self.bn1 = norm_layer(width,out_quant=PACT_fused_2(bits=8,size=(1,width,1,1)))
+        self.bn1 = norm_layer(width, out_quant=default_fused_Activation(width))
         self.conv2 = conv3x3(width, width, stride, groups, dilation)
-        self.bn2 = norm_layer(width,out_quant=PACT_fused_2(bits=8,size=(1,width,1,1)))
+        self.bn2 = norm_layer(width, out_quant=default_fused_Activation(width))
         self.conv3 = conv1x1(width, planes * self.expansion)
-        self.bn3 = norm_layer(planes * self.expansion)
+        self.bn3 = norm_layer(planes * self.expansion,out_quant=default_Quant(planes * self.expansion))
         # self.relu = ReLU(inplace=False)
         self.downsample = downsample
         self.stride = stride
         self.add = ADDwPACT(planes * self.expansion)
 
-    def forward(self, x: Tuple[torch.Tensor,torch.Tensor]) -> Tuple[torch.Tensor,torch.Tensor]:
+    def forward(self, x: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         identity = x
         # x = checkNanTuple(x,"Bottleneck in")
 
         fact1 = self.bn1.get_weight_factor()
-        out = self.conv1(x,fact1)
+        out = self.conv1(x, fact1)
         out = self.bn1(out)
         # out = checkNanTuple(out,"Bottleneck post first BN")
 
         # relu is fused into BN
 
-
         fact2 = self.bn2.get_weight_factor()
-        out = self.conv2(out,fact2)
+        out = self.conv2(out, fact2)
         out = self.bn2(out)
         # out = checkNanTuple(out,"Bottleneck post second BN")
         # relu is fused into BN
 
         fact3 = self.bn3.get_weight_factor()
-        out = self.conv3(out,fact3)
+        out = self.conv3(out, fact3)
         out = self.bn3(out)
         # out = checkNanTuple(out,"Bottleneck post third BN")
 
         if self.downsample is not None:
             identity = self.downsample(x)
 
-        out = self.add(out,identity)
+        out = self.add(out, identity)
         # out = checkNanTuple(out,"Bottleneck post add")
         # relu fused into add
 
@@ -242,8 +262,17 @@ class ResNet(nn.Module):
             )
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False,weight_quant_bits=8,weight_quant_channel_wise=True)
-        self.bn1 = norm_layer(self.inplanes,out_quant=PACT_fused_2(bits=8,size=(1,self.inplanes,1,1)))
+        self.conv1 = Conv2d(
+            3,
+            self.inplanes,
+            kernel_size=7,
+            stride=2,
+            padding=3,
+            bias=False,
+            weight_quant_bits=8,
+            weight_quant_channel_wise=True,
+        )
+        self.bn1 = norm_layer(self.inplanes, out_quant=default_fused_Activation(self.inplanes))
         # self.relu = ReLU(inplace=False)
         self.maxpool = MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
@@ -252,10 +281,16 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
 
         self.avgpool = AdaptiveAvgPool2d((1, 1))
-        self.fc = Linear(512 * block.expansion, num_classes,weight_quant_channel_wise=True,out_quant_channel_wise=True,out_quant_bits=16)
+        self.fc = Linear(
+            512 * block.expansion,
+            num_classes,
+            weight_quant_channel_wise=True,
+            out_quant_channel_wise=True,
+            out_quant_bits=16,
+        )
 
         self.start = Start(8)
-        self.stop = Stop((1,num_classes))
+        self.stop = Stop((1, num_classes))
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -289,7 +324,7 @@ class ResNet(nn.Module):
             self.dilation *= stride
             stride = 1
         if stride != 1 or self.inplanes != planes * block.expansion:
-            downsample = Downsample_Block(self.inplanes,planes,block.expansion,stride) 
+            downsample = Downsample_Block(self.inplanes, planes, block.expansion, stride)
 
         layers = []
         layers.append(
@@ -314,12 +349,11 @@ class ResNet(nn.Module):
 
     def _forward_impl(self, x: torch.Tensor) -> torch.Tensor:
         # See note [TorchScript super()]
-        x = x-0.5           # make symetric input 
+        x = x - 0.5  # make symetric input
         x = self.start(x)
 
-        
         fact1 = self.bn1.get_weight_factor()
-        x = self.conv1(x,fact1)
+        x = self.conv1(x, fact1)
         x = self.bn1(x)
         # relu is fused into BN
         # x = checkNanTuple(x,"forw. pre max pool")
@@ -327,23 +361,19 @@ class ResNet(nn.Module):
         # x = checkNanTuple(x,"forw. post max pool")
         x = self.layer1(x)
         # x = checkNanTuple(x,"forw. post layer 1")
-        x = self.layer2(x)        
+        x = self.layer2(x)
         # x = checkNanTuple(x,"forw. post layer 2")
         x = self.layer3(x)
         # x = checkNanTuple(x,"forw. post layer 3")
         x = self.layer4(x)
         # x = checkNanTuple(x,"forw. post layer 4")
 
-
-
-
         x = self.avgpool(x)
-        x = Flatten(x,1)
+        x = Flatten(x, 1)
         x = self.fc(x)
 
         x = self.stop(x)
         # x = checkNan.apply(x,"After stop")
-
 
         return x
 
@@ -369,11 +399,10 @@ def _resnet(
     return model
 
 
-
-
 import torchvision
 
-def resnet18(*, weights = None, progress: bool = True, **kwargs: Any) -> ResNet:
+
+def resnet18(*, weights=None, progress: bool = True, **kwargs: Any) -> ResNet:
     """ResNet-18 from `Deep Residual Learning for Image Recognition <https://arxiv.org/pdf/1512.03385.pdf>`__.
 
     Args:
