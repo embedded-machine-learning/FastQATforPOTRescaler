@@ -297,7 +297,7 @@ class PACT_fused_F8NET_mod(Quant):
 
                 self.alpha_used= self.alpha.clamp(min=self.clamp_min)
 
-                sigma = torch.var(x, [0, 2, 3], unbiased=False, keepdim=True).sqrt()
+                sigma = torch.var(x, [0, 2, 3], unbiased=False, keepdim=True).add(1e-5).sqrt()
 
                 sigma = sigma.clamp(max=(self.alpha_used * self.value_helper))
 
