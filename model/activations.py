@@ -275,14 +275,20 @@ class PACT_fused_F8NET_mod(Quant):
     """
 
     def __init__(self, bits, size=(-1,), rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
-        super(PACT_fused_2, self).__init__(bits, size, rounding_mode, quant_int_dtype)
+        super(PACT_fused_F8NET_mod, self).__init__(bits, size, rounding_mode, quant_int_dtype)
         self.bits = bits
         assert self.bits > 0
-        self.register_buffer("delta_in_factor", torch.tensor(1.0 / 40.0))
-        self.register_buffer("delta_out_factor", torch.tensor(1.0 / 40.0))
+        self.register_buffer("delta_in_factor", torch.tensor(1.0 / 70.0))
+        self.register_buffer("delta_out_factor", torch.tensor(1.0 / 70.0))
 
         self.register_buffer("value_helper", torch.tensor(70.0 / (2**self.bits - 1)))
         self.register_buffer("max_helper", torch.tensor(2**self.bits - 1))
+
+        self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones(size)))
+        LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
+        self.register_buffer("alpha_used", torch.zeros_like(self.alpha))
+        self.register_buffer("clamp_min", torch.Tensor([1e-3]))
+
 
         nn.init.constant_(self.min, 0)
         nn.init.constant_(self.max, 2**bits - 1)
@@ -290,10 +296,12 @@ class PACT_fused_F8NET_mod(Quant):
     def forward(self, x: torch.Tensor, fake: bool = False):
         if self.training:
             with torch.no_grad():
-                self.alpha_used = self.alpha.clone()  # block 2 small and negative alpha
-                self.alpha_used = self.alpha_used.clamp(min=1e-3)  # block 2 small and negative alpha
+                # self.alpha_used = self.alpha.clone()  # block 2 small and negative alpha
+                # self.alpha_used = self.alpha_used.clamp(min=1e-3)  # block 2 small and negative alpha
 
-                sigma = torch.var(x, [0, 2, 3], unbiased=False, keepdim=True).add(1e-5).sqrt()
+                self.alpha_used= self.alpha.clamp(min=self.clamp_min)
+
+                sigma = torch.var(x, [0, 2, 3], unbiased=False, keepdim=True).sqrt()
 
                 sigma = sigma.clamp(max=(self.alpha_used * self.value_helper))
 
