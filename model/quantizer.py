@@ -365,12 +365,6 @@ class F8NetQuant(Quant):
     def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
         super(F8NetQuant, self).__init__(bits,size, rounding_mode, quant_int_dtype)
         self.bits = bits
-        if size == (-1,):
-            self.register_buffer("abs", torch.ones(1))
-        else:
-            self.register_buffer("abs", torch.ones(size))
-        self.take_new = True
-        self.mom1 = mom1
         assert self.bits > 0
         self.register_buffer("delta_in_factor", torch.tensor(1.0/40.0))
         self.register_buffer("delta_out_factor", torch.tensor(1.0/40.0))
@@ -380,8 +374,8 @@ class F8NetQuant(Quant):
             with torch.no_grad():
                 sigma = torch.var(x,[0,2,3],unbiased=False,keepdim=True).add(1e-5).sqrt()
                 
-                self.delta_in = sigma.mul(self.delta_in_factor).log2().floor().exp2().detach()  
-                self.delta_out = sigma.mul(self.delta_in_factor).log2().floor().exp2().detach()  
+                self.delta_in = sigma.mul(self.delta_in_factor).log2().ceil().exp2().detach()  
+                self.delta_out = sigma.mul(self.delta_in_factor).log2().ceil().exp2().detach()  
         return super().forward(x,fake)
 
 

@@ -127,7 +127,7 @@ class RELU_back_function(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_outputs: Tensor) -> Tuple[Tensor, Tensor]:
-        zero_cmp = ctx.saved_tensors
+        zero_cmp, = ctx.saved_tensors
         val_gard = grad_outputs * zero_cmp
         return val_gard
 
@@ -208,10 +208,6 @@ class PACT_fused(FusedActivation):
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
 
         self.min = torch.zeros(size)
-
-    # def forward(self, val: Tensor) -> Tensor:
-    #     assert self.training
-    #     return PACT_function.apply(val,self.min,self.alpha)
 
     def forward(self, val: Tensor) -> Tensor:
         assert self.training
@@ -305,8 +301,8 @@ class PACT_fused_F8NET_mod(Quant):
 
                 sigma = sigma.clamp(max=(self.alpha_used * self.value_helper))
 
-                self.delta_in = sigma.mul(self.delta_in_factor).log2().floor().exp2().detach()
-                self.delta_out = sigma.mul(self.delta_in_factor).log2().floor().exp2().detach()
+                self.delta_in = sigma.mul(self.delta_in_factor).log2().ceil().exp2().detach()       # floor became ceil bc. it is iverted pre log therefore times -1 therefore ceil
+                self.delta_out = sigma.mul(self.delta_in_factor).log2().ceil().exp2().detach()
 
                 self.max = self.alpha.div(self.delta_in, rounding_mode=self.rounding_mode).clamp(
                     min=self.min, max=self.max_helper
@@ -314,22 +310,6 @@ class PACT_fused_F8NET_mod(Quant):
 
             x = PACT_back_function.apply(x, self.alpha)
         return super().forward(x, fake)
-
-
-class PACT_function(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, val: Tensor, min: Tensor, alpha: Tensor) -> Tensor:
-        ctx.save_for_backward(val >= alpha, val > 0)
-        val = val.clamp_(min=min, max=alpha)
-        return val
-
-    @staticmethod
-    def backward(ctx, grad_outputs: Tensor) -> Tuple[Tensor, Tensor]:
-        alpha_cmp, zero_cmp = ctx.saved_tensors
-        val_gard = grad_outputs * zero_cmp * (~alpha_cmp)
-        alpha_grad = grad_outputs * alpha_cmp * zero_cmp
-        return val_gard, None, alpha_grad
-
 
 class PACT_back_function(torch.autograd.Function):
     @staticmethod

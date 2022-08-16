@@ -7,7 +7,7 @@ from torchvision.utils import _log_api_usage_once
 from torchvision.models._api import WeightsEnum
 from torchvision.models._utils import _ovewrite_named_param
 
-from model.quantizer import F8NetQuant
+from .quantizer import F8NetQuant
 
 from .convolution import Conv2d
 from .batchnorm import BatchNorm2d
@@ -15,7 +15,6 @@ from .activations import PACT_fused, PACT_fused_2, PACT_fused_F8NET_mod, ReLU, R
 from .layer import AddQAT, MaxPool2d, Start, Stop, AdaptiveAvgPool2d, Flatten
 from .Linear import Linear
 from .utils import checkNan, checkNanTuple
-from model import batchnorm
 
 ####################################################################################
 # This is mostly copied and modivied from torchvision/jmodels/resnet.py
@@ -58,7 +57,7 @@ def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> Conv2d:
 def ADDwPACT(planes: int):
     return AddQAT(
         size=(1, planes, 1, 1),
-        out_quant=PACT_fused_2(bits=8, size=(1, planes, 1, 1)),
+        out_quant=default_fused_Activation(planes),
     )
 
 
