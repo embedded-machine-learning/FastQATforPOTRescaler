@@ -118,4 +118,4 @@ class UpsampleQAT(nn.Upsample):
         if self.training:
             return super(UpsampleQAT,self).forward(x[0]), x[1]
         else:
-            return super(UpsampleQAT,self).forward(x[0].type(torch.float32)).type(torch.int32), x[1]
+            return super(UpsampleQAT,self).forward(x[0]), x[1]

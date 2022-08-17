@@ -39,12 +39,7 @@ class LinQuantWeight(Quant):
     :type rounding_mode: str, optional
     """
 
-    def __init__(
-        self,
-        bits: int = 8,
-        size: tuple = (-1,),
-        rounding_mode: str = "trunc",
-    ) -> None:
+    def __init__(self, bits: int = 8, size: tuple = (-1,), rounding_mode: str = "trunc", layer_wise=False) -> None:
         """
         Please see class documentation `LinQuantWeight`
         """
@@ -52,9 +47,17 @@ class LinQuantWeight(Quant):
             __LOG_LEVEL_DEBUG__,
             f"LinQuantWeight passed arguments:\n\
             size:                           {size}\n\
-            rounding_mode:                  {rounding_mode}",
+            rounding_mode:                  {rounding_mode}\n\
+            layer_wise:                     {layer_wise}\n\
+            ",
         )
         super(LinQuantWeight, self).__init__(bits, size, rounding_mode)
+
+        self.layer_wise = layer_wise
+        if self.layer_wise:
+            self.rexp_view=(-1,1,1,1)
+        else:
+            self.rexp_view=(1,-1,1,1)
 
         if size == (-1,):
             self.register_buffer("abs", torch.ones(1))
@@ -93,7 +96,7 @@ class LinQuantWeight(Quant):
         :rtype: tuple[Tensor,Tensor]
         """
         with torch.no_grad():
-            abs = get_abs(self, x * (rexp_diff.view(1, -1, 1, 1)))
+            abs = get_abs(self, x * (rexp_diff.view(*self.rexp_view)))
             LOG(__LOG_LEVEL_HIGH_DETAIL__, f"LinQuantWeight.forward: abs", abs)
 
             self.abs = abs.detach()
@@ -109,8 +112,8 @@ class LinQuantWeight(Quant):
         return (
             FakeQuant(
                 x=x.clone(),
-                delta_in=self.delta_in / ((rexp_diff.view(1, -1, 1, 1) * fact)),
-                delta_out=self.delta_out / ((rexp_diff.view(1, -1, 1, 1) * fact)),
+                delta_in=self.delta_in / ((rexp_diff.view(*self.rexp_view) * fact)),
+                delta_out=self.delta_out / ((rexp_diff.view(*self.rexp_view) * fact)),
                 training=self.training,
                 min_quant=self.min,
                 max_quant=self.max,
@@ -121,15 +124,15 @@ class LinQuantWeight(Quant):
 
 
 class LinQuantWeight_mod_F8NET(LinQuantWeight):
-    def __init__(self, bits: int = 8, size: tuple = (-1,), rounding_mode: str = "trunc") -> None:
-        super().__init__(bits, size, rounding_mode)
+    def __init__(self, bits: int = 8, size: tuple = (-1,), rounding_mode: str = "trunc", layer_wise=False) -> None:
+        super().__init__(bits, size, rounding_mode,layer_wise)
         self.register_buffer("delta_in_factor", torch.tensor(1.0 / 40.0))
         self.register_buffer("delta_out_factor", torch.tensor(1.0 / 40.0))
 
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
         with torch.no_grad():
             sigma = (
-                torch.var(x * (rexp_diff.view(1, -1, 1, 1)), self.reducelist, unbiased=False, keepdim=True)
+                torch.var(x * (rexp_diff.view(*self.rexp_view)), self.reducelist, unbiased=False, keepdim=True)
                 .add_(1e-5)
                 .sqrt_()
             )
@@ -140,7 +143,7 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
 
             fact = fact_fun(self.delta_out * rexp_mean).view(-1, 1, 1, 1)
 
-            delta_for_quant = self.delta_in.div(rexp_diff.view(1, -1, 1, 1)).div_(fact)
+            delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
 
         return (
             FakeQuant(
@@ -269,6 +272,8 @@ class Conv2d(nn.Conv2d):
             dtype,
         )
 
+        assert groups == 1 or (groups == in_channels and groups == out_channels)
+
         # Weight Quant
         if weight_quant_args == None:
             weight_quant_args = (
@@ -276,6 +281,8 @@ class Conv2d(nn.Conv2d):
                 (-1,) if not weight_quant_channel_wise else (out_channels, 1, 1, 1),
                 "trunc",
             )
+
+        self.layer_wise = groups == in_channels
 
         LOG(__LOG_LEVEL_DEBUG__, f"Conv2dQuant.__init__: weight_quant_qrgs", weight_quant_args)
 
