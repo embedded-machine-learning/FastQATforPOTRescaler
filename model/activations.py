@@ -56,9 +56,9 @@ class LeakReLU(torch.nn.LeakyReLU):
                 x.data = x.data.mul_(rexp.exp2())
                 LOG(__LOG_LEVEL_TO_MUCH__, "LeakReLU.forward x post scale-back", x)
         else:
-            x = F.leaky_relu(x.type(torch.float32), negative_slope=self.negative_slope, inplace=self.inplace)
+            x = F.leaky_relu(x, negative_slope=self.negative_slope, inplace=self.inplace)
             LOG(__LOG_LEVEL_TO_MUCH__, "LeakReLU.forward x post relu", x)
-            x = Floor.apply(x).type(torch.int32)
+            x = Floor.apply(x)
             LOG(__LOG_LEVEL_TO_MUCH__, "LeakReLU.forward x post floor", x)
         return x, rexp
 
@@ -91,8 +91,8 @@ class ReLU_F8NET_fused(Quant):
     :type size: tuple, optional
     """
 
-    def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
-        super(ReLU_F8NET_fused, self).__init__(bits, size, rounding_mode, quant_int_dtype)
+    def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor") -> None:
+        super(ReLU_F8NET_fused, self).__init__(bits, size, rounding_mode)
         self.bits = bits
         if size == (-1,):
             self.register_buffer("abs", torch.ones(1))
@@ -161,60 +161,7 @@ class PACT(nn.Module):
             out = 0.5 * (val.abs() - (val - self.alpha).abs() + self.alpha)
             return out, rexp
         else:
-            return val.clamp(min=0), rexp
-
-
-class FusedActivation(nn.Module):
-    """
-    FusedActivation The base class for fused activations
-
-    A fused activation will only be called in training, never in evaluation. It has do define a minimum and maximum.
-
-    :param size: the shape of the minimum and maximum, defaults to (1,)
-    :type size: tuple
-    """
-
-    def __init__(self, size=(1,)) -> None:
-        super(FusedActivation, self).__init__()
-        self.register_buffer("min", torch.zeros(size))
-        self.register_buffer("max", torch.zeros(size))
-
-    def forward(self, args):
-        raise NotImplementedError()
-
-
-class PACT_fused(FusedActivation):
-    """
-    PACT The implementation of the PACT activation function
-
-    This is the implementation of the PACT activation function from `https://openreview.net/forum?id=By5ugjyCb`
-    The fused part implicates, that is used inside the bn prior to quantizing, ans will never be called in the quantized domain
-
-    :param size: The shape for alpha, defaults to (1,)
-    :type size: tuple, optional
-    """
-
-    def __init__(self, size=(1,)) -> None:
-        LOG(
-            __LOG_LEVEL_DEBUG__,
-            f"PACT arguments passed:\n\
-            size:                           {size}\n\
-            ",
-        )
-        super(PACT_fused, self).__init__(size)
-        self.size = size
-        LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: self.size", self.size)
-        self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones(size)))
-        LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
-
-        self.min = torch.zeros(size)
-
-    def forward(self, val: Tensor) -> Tensor:
-        assert self.training
-        self.max = self.alpha.detach()
-        out = 0.5 * (val.abs() - (val - self.alpha).abs() + self.alpha)
-        return out
-
+            return val.clamp(min=0,max = self.alpha), rexp
 
 class PACT_fused_2(Quant):
     """
@@ -227,8 +174,8 @@ class PACT_fused_2(Quant):
     :type size: tuple, optional
     """
 
-    def __init__(self, bits, size=(-1,), rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
-        super(PACT_fused_2, self).__init__(bits, size, rounding_mode, quant_int_dtype)
+    def __init__(self, bits, size=(-1,), rounding_mode: str = "floor") -> None:
+        super(PACT_fused_2, self).__init__(bits, size, rounding_mode)
         self.bits = bits
         assert self.bits > 0
         self.register_buffer("delta_in_factor", torch.tensor(1.0 / (2.0**self.bits - 1)))
@@ -270,8 +217,8 @@ class PACT_fused_F8NET_mod(Quant):
     :type size: tuple, optional
     """
 
-    def __init__(self, bits, size=(-1,), rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
-        super(PACT_fused_F8NET_mod, self).__init__(bits, size, rounding_mode, quant_int_dtype)
+    def __init__(self, bits, size=(-1,), rounding_mode: str = "floor") -> None:
+        super(PACT_fused_F8NET_mod, self).__init__(bits, size, rounding_mode)
         self.bits = bits
         assert self.bits > 0
         self.register_buffer("delta_in_factor", torch.tensor(1.0 / 70.0))

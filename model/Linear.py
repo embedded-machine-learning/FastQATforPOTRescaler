@@ -38,8 +38,6 @@ class LinQuantWeight(Quant):
     :type size: tuple, optional
     :param rounding_mode: Sets how the values are rounded `https://pytorch.org/docs/stable/generated/torch.div.html`, defaults to "trunc"
     :type rounding_mode: str, optional
-    :param quant_int_dtype: The integer type used once quantized, defaults to torch.int32
-    :type quant_int_dtype: torch.dtype, optional
     """
 
     def __init__(
@@ -47,16 +45,18 @@ class LinQuantWeight(Quant):
         bits: int = 8,
         size: tuple = (-1,),
         rounding_mode: str = "trunc",
-        quant_int_dtype: torch.dtype = torch.int32,
     ) -> None:
         """
         Please see class documentation `LinQuantWeight`
         """
         LOG(
             __LOG_LEVEL_HIGH_DETAIL__,
-            f"LinQuantWeight passed arguments:\n\tsize:\t\t\t{size}\n\trounding_mode:\t{rounding_mode}\n\tquant_int_dtype:\t{quant_int_dtype}",
+            f"LinQuantWeight passed arguments:\n\
+            size:                           {size}\n\
+            rounding_mode:                  {rounding_mode}\n\
+            ",
         )
-        super(LinQuantWeight, self).__init__(bits,size, rounding_mode, quant_int_dtype)
+        super(LinQuantWeight, self).__init__(bits, size, rounding_mode)
 
         self.bits = bits
         if size == (-1,):
@@ -118,23 +118,29 @@ class LinQuantWeight(Quant):
                 min_quant=self.min,
                 max_quant=self.max,
                 rounding_mode=self.rounding_mode,
-                quant_int_dtype=self.quant_int_dtype,
             ),
             fact,
         )
 
 
 class LinQuantWeight_mod_F8NET(LinQuantWeight):
-    def __init__(self, bits: int = 8, size: tuple = (-1, ), rounding_mode: str = "trunc", quant_int_dtype: torch.dtype = torch.int32) -> None:
-        super().__init__(bits, size, rounding_mode, quant_int_dtype)
-        self.register_buffer("delta_in_factor", torch.tensor(1.0/40.0))
-        self.register_buffer("delta_out_factor", torch.tensor(1.0/40.0))
+    def __init__(
+        self,
+        bits: int = 8,
+        size: tuple = (-1,),
+        rounding_mode: str = "trunc",
+    ) -> None:
+        super().__init__(bits, size, rounding_mode)
+        self.register_buffer("delta_in_factor", torch.tensor(1.0 / 40.0))
+        self.register_buffer("delta_out_factor", torch.tensor(1.0 / 40.0))
 
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
         with torch.no_grad():
-            sigma = torch.var(x* (rexp_diff.view(1, -1)),self.reducelist,unbiased=False,keepdim=True).add(1e-5).sqrt()
-            
-            self.delta_in = sigma.mul(self.delta_in_factor) 
+            sigma = (
+                torch.var(x * (rexp_diff.view(1, -1)), self.reducelist, unbiased=False, keepdim=True).add(1e-5).sqrt()
+            )
+
+            self.delta_in = sigma.mul(self.delta_in_factor)
             self.delta_out = sigma.mul(self.delta_in_factor)
 
             fact = fact_fun(self.delta_out * rexp_mean).view(-1, 1)
@@ -148,7 +154,6 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
                 min_quant=self.min,
                 max_quant=self.max,
                 rounding_mode=self.rounding_mode,
-                quant_int_dtype=self.quant_int_dtype,
             ),
             fact,
         )
@@ -179,7 +184,7 @@ class Linear(nn.Linear):
     :type weight_quant_args: _type_, optional
     :param weight_quant_kargs: Passes named arguments to the initializer of the weight quantization class, defaults to {}
     :type weight_quant_kargs: dict, optional
-    
+
     :param out_quant: A callable object which overrides the default output quantization, gets called with (values) , defaults to None
     :type out_quant: _type_, optional
     :param out_quant_bits: Number of bits, defaults to 8
@@ -190,11 +195,6 @@ class Linear(nn.Linear):
     :type out_quant_args: _type_, optional
     :param out_quant_kargs: Passes named arguments to the initializer of the out quantization class, defaults to {}
     :type out_quant_kargs: dict, optional
-    
-    :param quant_int_dtype: The desired integer type, defaults to torch.int32
-    :type quant_int_dtype: torch.dtype, optional
-    :param quant_float_dtype: The desired floating-point type, defaults to torch.float32
-    :type quant_float_dtype: torch.dtype, optional
     """
 
     def __init__(
@@ -214,8 +214,6 @@ class Linear(nn.Linear):
         out_quant_channel_wise=False,
         out_quant_args=None,
         out_quant_kargs={},
-        quant_int_dtype: torch.dtype = torch.int32,
-        quant_float_dtype: torch.dtype = torch.float32,
     ) -> None:
         LOG(
             __LOG_LEVEL_DEBUG__,
@@ -235,8 +233,6 @@ class Linear(nn.Linear):
             out_quant_channel_wise:         {out_quant_channel_wise}\n\
             out_quant_args:                 {out_quant_args}\n\
             out_quant_kargs:                {out_quant_kargs}\n\
-            quant_int_dtype:                {quant_int_dtype}\n\
-            quant_float_dtype:              {quant_float_dtype}\n\
             ",
         )
         super().__init__(in_features, out_features, bias, device, dtype)
@@ -246,7 +242,6 @@ class Linear(nn.Linear):
                 weight_quant_bits,
                 (-1,) if not weight_quant_channel_wise else (out_features, 1),
                 "trunc",
-                quant_int_dtype,
             )
         LOG(__LOG_LEVEL_TO_MUCH__, "Linear.__init__: weight_quant_args", weight_quant_args)
 
@@ -263,7 +258,6 @@ class Linear(nn.Linear):
                 (-1,) if not out_quant_channel_wise else (1, out_features),
                 0.1,
                 "floor",
-                quant_int_dtype,
             )
         LOG(__LOG_LEVEL_TO_MUCH__, "Linear.__init__: out_quant_args", out_quant_args)
 
@@ -275,18 +269,13 @@ class Linear(nn.Linear):
 
         self.register_buffer("quant_weight", torch.zeros_like(self.weight))
         LOG(__LOG_LEVEL_TO_MUCH__, f"Linear.__init__: buffer quant_weight", self.quant_weight)
-        self.register_buffer("n", torch.zeros(((1,out_features) if out_quant_channel_wise else 1)))
+        self.register_buffer("n", torch.zeros(((1, out_features) if out_quant_channel_wise else 1)))
         LOG(__LOG_LEVEL_TO_MUCH__, f"Linear.__init__: buffer n", self.n)
         if bias:
-            self.register_buffer("t", torch.zeros((1,out_features)))
+            self.register_buffer("t", torch.zeros((1, out_features)))
         else:
             self.t = None
         LOG(__LOG_LEVEL_TO_MUCH__, f"Linear.__init__: buffer t", self.t)
-
-        self.quant_int_dtype = quant_int_dtype
-        LOG(__LOG_LEVEL_TO_MUCH__, f"Linear.__init__: self.quant_int_dtype", self.quant_int_dtype)
-        self.quant_float_dtype = quant_float_dtype
-        LOG(__LOG_LEVEL_TO_MUCH__, f"Linear.__init__: self.quant_float_dtype", self.quant_float_dtype)
 
     def get_weight_factor(self, delta_O: Tensor):
         """
@@ -359,23 +348,23 @@ class Linear(nn.Linear):
 
         if factor_fun == None:
             weight, fact = self.weight_quant(
-                weight.type(self.quant_float_dtype),
-                rexp_mean.type(self.quant_float_dtype).exp2(),
-                rexp_diff.type(self.quant_float_dtype).exp2(),
+                weight,
+                rexp_mean.exp2(),
+                rexp_diff.exp2(),
                 self.get_weight_factor(self.out_quant.delta_in.view(-1).detach()),
             )
         else:
             weight, fact = self.weight_quant(
-                weight.type(self.quant_float_dtype),
-                rexp_mean.type(self.quant_float_dtype).exp2(),
-                rexp_diff.type(self.quant_float_dtype).exp2(),
+                weight,
+                rexp_mean.exp2(),
+                rexp_diffexp2(),
                 factor_fun,
             )
         LOG(__LOG_LEVEL_DEBUG__, "Linear.forward weight", weight)
         LOG(__LOG_LEVEL_TO_MUCH__, "Linear.forward fact", fact)
 
-        weight = weight.type(self.weight.dtype)
-        fact = fact.type(self.weight.dtype)
+        # weight = weight.type(self.weight.dtype)
+        # fact = fact.type(self.weight.dtype)
 
         if self.bias == None:
             bias = None
@@ -388,7 +377,6 @@ class Linear(nn.Linear):
                 min_quant=self.out_quant.min,
                 max_quant=self.out_quant.max,
                 rounding_mode=self.out_quant.rounding_mode,
-                quant_int_dtype=self.out_quant.quant_int_dtype,
             )
         LOG(__LOG_LEVEL_DEBUG__, "Linear.forward bias", bias)
 
@@ -410,11 +398,7 @@ class Linear(nn.Linear):
         if self.training:
             out = F.linear(input, weight, bias)
         else:
-            out = F.linear(
-                input.type(self.quant_float_dtype),
-                weight.type(self.quant_float_dtype),
-                None,
-            ).type(self.quant_int_dtype)
+            out = F.linear(input, weight, None)
         LOG(__LOG_LEVEL_DEBUG__, "Linear.forward out", out)
 
         if factor_fun == None:

@@ -11,7 +11,7 @@ from .quantizer import F8NetQuant
 
 from .convolution import Conv2d
 from .batchnorm import BatchNorm2d
-from .activations import PACT_fused, PACT_fused_2, PACT_fused_F8NET_mod, ReLU, ReLU_F8NET_fused
+from .activations import PACT_fused_F8NET_mod, ReLU_F8NET_fused
 from .layer import AddQAT, MaxPool2d, Start, Stop, AdaptiveAvgPool2d, Flatten
 from .Linear import LinQuantWeight_mod_F8NET as Lin_Weight_quant_mod_F8NET
 from .convolution import LinQuantWeight_mod_F8NET as Conv_Weight_quant_mod_F8NET

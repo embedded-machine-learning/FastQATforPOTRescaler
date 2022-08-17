@@ -117,7 +117,6 @@ class Start(nn.Module):
             self.min,
             self.max,
             "floor",
-            torch.int32,
         )
         return x, self.run
 
@@ -211,10 +210,6 @@ class BlockQuantN(nn.Module):
     :type activation_args: _type_, optional
     :param activation_kargs: Additional Named parameters for the activation function, defaults to {}
     :type activation_kargs: dict, optional
-    :param quant_int_dtype: The desired integer type, defaults to torch.int32
-    :type quant_int_dtype: torch.dtype, optional
-    :param quant_float_dtype: The desired float type, defaults to torch.float32
-    :type quant_float_dtype: torch.dtype, optional
     """
 
     def __init__(
@@ -251,8 +246,6 @@ class BlockQuantN(nn.Module):
         activation_args=None,
         activation_kargs={},
         # General stuff
-        quant_int_dtype: torch.dtype = torch.int32,
-        quant_float_dtype: torch.dtype = torch.float32,
         device=None,
         dtype=None,
     ) -> None:
@@ -282,8 +275,6 @@ class BlockQuantN(nn.Module):
             out_quant_channel_wise=False,
             out_quant_args=None,
             out_quant_kargs={},
-            quant_int_dtype=quant_int_dtype,
-            quant_float_dtype=quant_float_dtype,
         )
         self.bn = BatchNorm2d(
             num_features=out_channels,
@@ -299,8 +290,6 @@ class BlockQuantN(nn.Module):
             out_quant_channel_wise=out_quant_channel_wise,
             out_quant_args=out_quant_args,
             out_quant_kargs=out_quant_kargs,
-            quant_int_dtype=quant_int_dtype,
-            quant_float_dtype=quant_float_dtype,
         )
 
         if activation_args == None:
@@ -357,8 +346,6 @@ class BlockQuantNwoA(BlockQuantN):
         out_quant_args=None,
         out_quant_kargs={},
         # General Stuff
-        quant_int_dtype: torch.dtype = torch.int32,
-        quant_float_dtype: torch.dtype = torch.float32,
         device=None,
         dtype=None,
     ) -> None:
@@ -390,8 +377,6 @@ class BlockQuantNwoA(BlockQuantN):
             out_quant_args=out_quant_args,
             out_quant_kargs=out_quant_kargs,
             activation=nn.Sequential(),
-            quant_int_dtype=quant_int_dtype,
-            quant_float_dtype=quant_float_dtype,
             device=device,
             dtype=dtype,
         )
@@ -418,8 +403,6 @@ class AddQAT(nn.Module):
     :type out_quant_args: _type_, optional
     :param out_quant_kargs: Passes named arguments to the initializer of the out quantization class, defaults to {}
     :type out_quant_kargs: dict, optional
-    :param quant_int_dtype: The desired integer type, defaults to torch.int32
-    :type quant_int_dtype: torch.dtype, optional
     """
 
     def __init__(
@@ -430,7 +413,6 @@ class AddQAT(nn.Module):
         out_quant_channel_wise: bool = False,
         out_quant_args=None,
         out_quant_kargs={},
-        quant_int_dtype: torch.dtype = torch.int32,
     ) -> None:
         LOG(
             __LOG_LEVEL_DEBUG__,
@@ -441,7 +423,6 @@ class AddQAT(nn.Module):
             out_quant_channel_wise:         {out_quant_channel_wise}\n\
             out_quant_args:                 {out_quant_args}\n\
             out_quant_kargs:                {out_quant_kargs}\n\
-            quant_int_dtype:                {quant_int_dtype}\n\
             ",
         )
         super(AddQAT, self).__init__()
@@ -457,7 +438,6 @@ class AddQAT(nn.Module):
                 (-1,) if not out_quant_channel_wise else size,
                 0.1,
                 "floor",
-                quant_int_dtype,
             )
         LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.__init__: out_quant_args", out_quant_args)
 
@@ -477,7 +457,7 @@ class AddQAT(nn.Module):
             # out = checkNan.apply(out,"AddQAT out")
 
             LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: out", out)
-            out = self.out_quant(out,__HIGH_PRES__)
+            out = self.out_quant(out, __HIGH_PRES__)
             # out = checkNan.apply(out,"AddQAT out post quant")
             LOG(__LOG_LEVEL_TO_MUCH__, "AddQAT.forward: out post quant", out)
             rexp = self.out_quant.delta_out.log2()
@@ -547,14 +527,14 @@ class MaxPool2d(nn.MaxPool2d):
         else:
             return (
                 F.max_pool2d(
-                    val.type(torch.float32),
+                    val,
                     self.kernel_size,
                     self.stride,
                     self.padding,
                     self.dilation,
                     self.ceil_mode,
                     self.return_indices,
-                ).type(torch.int32),
+                ),
                 rexp,
             )
 
@@ -571,9 +551,9 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d):
 
         if self.training:
             with torch.no_grad():
-                val.data = val.data / torch.exp2(rexp.view(-1)[None, :, None, None])
+                val.data = val.data / torch.exp2(rexp.view(1, -1, 1, 1))
                 val.data = val.data.floor()
-                val.data = val.data * torch.exp2(rexp.view(-1)[None, :, None, None])
+                val.data = val.data * torch.exp2(rexp.view(1, -1, 1, 1))
 
         else:
             val = val.floor()

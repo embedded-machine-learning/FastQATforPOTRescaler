@@ -232,18 +232,15 @@ class Quant(nn.Module):
     :type size: tuple
     :param rounding_mode: how div should round, defaults to "floor"
     :type rounding_mode: str, optional
-    :param quant_int_dtype: The desired datatype, defaults to torch.int32
-    :type quant_int_dtype: torch.dtype, optional
     """
 
-    def __init__(self, bits,size=(-1,), rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
+    def __init__(self, bits,size=(-1,), rounding_mode: str = "floor") -> None:
         super(Quant, self).__init__()
         LOG(
             __LOG_LEVEL_DEBUG__,
             f"Quant passed arguments:\n\
             size:                           {size}\n\
             rounding_mode:                  {rounding_mode}\n\
-            quant_int_dtype:                {quant_int_dtype}\n\
             ",
         )
         self.simple = False
@@ -279,8 +276,6 @@ class Quant(nn.Module):
         LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: permutelist", self.permutelist)
         self.rounding_mode = rounding_mode
         LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: rounding_mode", self.rounding_mode)
-        self.quant_int_dtype = quant_int_dtype
-        LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: quant_int_dtype", self.quant_int_dtype)
 
         self.register_buffer("max", torch.ones(self.size)*(2 ** (self.bits - 1) - 1))
         LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: buffer max", self.max)
@@ -298,13 +293,12 @@ class Quant(nn.Module):
             min_quant=self.min,
             max_quant=self.max,
             rounding_mode=self.rounding_mode,
-            quant_int_dtype=self.quant_int_dtype,
         )
 
 
 class LinQuant(Quant):
-    def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
-        super(LinQuant, self).__init__(bits,size, rounding_mode, quant_int_dtype)
+    def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor") -> None:
+        super(LinQuant, self).__init__(bits,size, rounding_mode, )
         if size == (-1,):
             self.register_buffer("abs", torch.ones(1))
         else:
@@ -329,8 +323,8 @@ class LinQuant(Quant):
 
 
 class LinQuantExpScale(Quant):
-    def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
-        super(LinQuantExpScale, self).__init__(bits,size, rounding_mode, quant_int_dtype)
+    def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor") -> None:
+        super(LinQuantExpScale, self).__init__(bits,size, rounding_mode)
         if size == (-1,):
             self.register_buffer("abs", torch.ones(1))
         else:
@@ -364,8 +358,8 @@ class F8NetQuant(Quant):
     :param size: The shape for alpha, defaults to (1,)
     :type size: tuple, optional
     """
-    def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor", quant_int_dtype=torch.int32) -> None:
-        super(F8NetQuant, self).__init__(bits,size, rounding_mode, quant_int_dtype)
+    def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor") -> None:
+        super(F8NetQuant, self).__init__(bits,size, rounding_mode)
         self.bits = bits
         assert self.bits > 0
         self.register_buffer("delta_in_factor", torch.tensor(1.0/40.0))
@@ -404,13 +398,12 @@ def FakeQuant(
     min_quant: Tensor,
     max_quant: Tensor,
     rounding_mode: str = "floor",
-    quant_int_dtype=torch.int32,
 ) -> Tensor:
     with torch.no_grad():
         if training:
             x.data.div_(delta_in, rounding_mode=rounding_mode).clamp_(min_quant, max_quant).mul_(delta_out)
         else:
-            x = x.data.div(delta_in, rounding_mode=rounding_mode).clamp_(min_quant, max_quant).type(quant_int_dtype)
+            x = x.data.div(delta_in, rounding_mode=rounding_mode).clamp_(min_quant, max_quant)
     return x
 
 

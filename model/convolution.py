@@ -37,8 +37,6 @@ class LinQuantWeight(Quant):
     :type size: tuple, optional
     :param rounding_mode: Sets how the values are rounded `https://pytorch.org/docs/stable/generated/torch.div.html`, defaults to "trunc"
     :type rounding_mode: str, optional
-    :param quant_int_dtype: The integer type used once quantized, defaults to torch.int32
-    :type quant_int_dtype: torch.dtype, optional
     """
 
     def __init__(
@@ -46,7 +44,6 @@ class LinQuantWeight(Quant):
         bits: int = 8,
         size: tuple = (-1,),
         rounding_mode: str = "trunc",
-        quant_int_dtype: torch.dtype = torch.int32,
     ) -> None:
         """
         Please see class documentation `LinQuantWeight`
@@ -55,10 +52,9 @@ class LinQuantWeight(Quant):
             __LOG_LEVEL_DEBUG__,
             f"LinQuantWeight passed arguments:\n\
             size:                           {size}\n\
-            rounding_mode:                  {rounding_mode}\n\
-            quant_int_dtype:                {quant_int_dtype}",
+            rounding_mode:                  {rounding_mode}",
         )
-        super(LinQuantWeight, self).__init__(bits,size, rounding_mode, quant_int_dtype)
+        super(LinQuantWeight, self).__init__(bits, size, rounding_mode)
 
         if size == (-1,):
             self.register_buffer("abs", torch.ones(1))
@@ -119,23 +115,26 @@ class LinQuantWeight(Quant):
                 min_quant=self.min,
                 max_quant=self.max,
                 rounding_mode=self.rounding_mode,
-                quant_int_dtype=self.quant_int_dtype,
             ),
             fact,
         )
 
 
 class LinQuantWeight_mod_F8NET(LinQuantWeight):
-    def __init__(self, bits: int = 8, size: tuple = (-1, ), rounding_mode: str = "trunc", quant_int_dtype: torch.dtype = torch.int32) -> None:
-        super().__init__(bits, size, rounding_mode, quant_int_dtype)
-        self.register_buffer("delta_in_factor", torch.tensor(1.0/40.0))
-        self.register_buffer("delta_out_factor", torch.tensor(1.0/40.0))
+    def __init__(self, bits: int = 8, size: tuple = (-1,), rounding_mode: str = "trunc") -> None:
+        super().__init__(bits, size, rounding_mode)
+        self.register_buffer("delta_in_factor", torch.tensor(1.0 / 40.0))
+        self.register_buffer("delta_out_factor", torch.tensor(1.0 / 40.0))
 
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
         with torch.no_grad():
-            sigma = torch.var(x* (rexp_diff.view(1, -1, 1, 1)),self.reducelist,unbiased=False,keepdim=True).add_(1e-5).sqrt_()
-            
-            self.delta_in = sigma.mul_(self.delta_in_factor)    # delta in and delta out identical
+            sigma = (
+                torch.var(x * (rexp_diff.view(1, -1, 1, 1)), self.reducelist, unbiased=False, keepdim=True)
+                .add_(1e-5)
+                .sqrt_()
+            )
+
+            self.delta_in = sigma.mul_(self.delta_in_factor)  # delta in and delta out identical
             self.delta_out.data = self.delta_in
             # self.delta_out = sigma#.mul(self.delta_in_factor)
 
@@ -152,7 +151,6 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
                 min_quant=self.min,
                 max_quant=self.max,
                 rounding_mode=self.rounding_mode,
-                quant_int_dtype=self.quant_int_dtype,
             ),
             fact,
         )
@@ -205,10 +203,6 @@ class Conv2d(nn.Conv2d):
     :type out_quant_args: _type_, optional
     :param out_quant_kargs: Passes named arguments to the initializer of the out quantization class, defaults to {}
     :type out_quant_kargs: dict, optional
-    :param quant_int_dtype: The desired integer type, defaults to torch.int32
-    :type quant_int_dtype: torch.dtype, optional
-    :param quant_float_dtype: The desired floating-point type, defaults to torch.float32
-    :type quant_float_dtype: torch.dtype, optional
     """
 
     def __init__(
@@ -234,8 +228,6 @@ class Conv2d(nn.Conv2d):
         out_quant_channel_wise=False,
         out_quant_args=None,
         out_quant_kargs={},
-        quant_int_dtype: torch.dtype = torch.int32,
-        quant_float_dtype: torch.dtype = torch.float32,
     ) -> None:
         LOG(
             __LOG_LEVEL_DEBUG__,
@@ -261,8 +253,6 @@ class Conv2d(nn.Conv2d):
             out_quant_channel_wise:         {out_quant_channel_wise}\n\
             out_quant_args:                 {out_quant_args}\n\
             out_quant_kargs:                {out_quant_kargs}\n\
-            quant_int_dtype:                {quant_int_dtype}\n\
-            quant_float_dtype:              {quant_float_dtype}\n\
             ",
         )
         super(Conv2d, self).__init__(
@@ -314,18 +304,13 @@ class Conv2d(nn.Conv2d):
 
         self.register_buffer("quant_weight", torch.zeros_like(self.weight))
         LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: quant_weight buffer", self.quant_weight)
-        self.register_buffer("n", torch.zeros(((1,out_channels,1,1) if out_quant_channel_wise else 1)))
+        self.register_buffer("n", torch.zeros(((1, out_channels, 1, 1) if out_quant_channel_wise else 1)))
         LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: n buffer", self.n)
         if bias:
-            self.register_buffer("t", torch.zeros(((1,out_channels,1,1) if out_quant_channel_wise else 1)))
+            self.register_buffer("t", torch.zeros(((1, out_channels, 1, 1) if out_quant_channel_wise else 1)))
         else:
             self.t = None
         LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: t buffer", self.t)
-
-        self.quant_int_dtype = quant_int_dtype
-        LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: self.quant_int_dtype", self.quant_int_dtype)
-        self.quant_float_dtype = quant_float_dtype
-        LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: self.quant_float_dtype", self.quant_float_dtype)
 
         if __DEBUG__:
             self.debug_fact = []
@@ -405,23 +390,23 @@ class Conv2d(nn.Conv2d):
 
         if factor_fun == None:
             weight, fact = self.weight_quant(
-                weight.type(self.quant_float_dtype),
-                rexp_mean.type(self.quant_float_dtype).exp2(),
-                rexp_diff.type(self.quant_float_dtype).exp2(),
+                weight,
+                rexp_mean.exp2(),
+                rexp_diff.exp2(),
                 self.get_weight_factor(self.out_quant.delta_in.view(-1).detach()),
             )
         else:
             weight, fact = self.weight_quant(
-                weight.type(self.quant_float_dtype),
-                rexp_mean.type(self.quant_float_dtype).exp2(),
-                rexp_diff.type(self.quant_float_dtype).exp2(),
+                weight,
+                rexp_mean.exp2(),
+                rexp_diff.exp2(),
                 factor_fun,
             )
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward weight", weight)
         LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward fact", fact)
 
-        weight = weight.type(self.weight.dtype)
-        fact = fact.type(self.weight.dtype)
+        # weight = weight.type(self.weight.dtype)
+        # fact = fact.type(self.weight.dtype)
 
         if self.bias == None:
             bias = None
@@ -434,7 +419,6 @@ class Conv2d(nn.Conv2d):
                 min_quant=self.out_quant.min.view(-1),
                 max_quant=self.out_quant.max.view(-1),
                 rounding_mode=self.out_quant.rounding_mode,
-                quant_int_dtype=self.out_quant.quant_int_dtype,
             )
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward bias", bias)
 
@@ -446,7 +430,7 @@ class Conv2d(nn.Conv2d):
             LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward self.t", self.t)
 
             self.quant_weight = weight.detach()
-            if factor_fun==None:
+            if factor_fun == None:
                 self.n = self.calculate_n(
                     self.weight_quant.delta_out.view(-1).detach(),
                     2 ** rexp_mean.view(-1).detach(),
@@ -464,10 +448,10 @@ class Conv2d(nn.Conv2d):
             out = self._conv_forward(input, weight, bias)
         else:
             out = self._conv_forward(
-                input.type(self.quant_float_dtype),
-                weight.type(self.quant_float_dtype),
+                input,
+                weight,
                 None,
-            ).type(self.quant_int_dtype)
+            )
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward out", out)
 
         if factor_fun == None:

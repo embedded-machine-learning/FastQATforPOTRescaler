@@ -23,7 +23,7 @@ from . import (
     __LOG_LEVEL_DEBUG__,
     __LOG_LEVEL_HIGH_DETAIL__,
     __LOG_LEVEL_TO_MUCH__,
-    __HIGH_PRES__
+    __HIGH_PRES__,
 )
 
 
@@ -237,11 +237,6 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
     :type out_quant_args: _type_, optional
     :param out_quant_kargs: Passes named arguments to the initializer of the out quantization class, defaults to {}
     :type out_quant_kargs: dict, optional
-
-    :param quant_int_dtype: The desired integer type, defaults to torch.int32
-    :type quant_int_dtype: torch.dtype, optional
-    :param quant_float_dtype: The desired floating-point type, defaults to torch.float32
-    :type quant_float_dtype: torch.dtype, optional
     """
 
     def __init__(
@@ -259,8 +254,6 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         out_quant_channel_wise: bool = False,
         out_quant_args=None,
         out_quant_kargs={},
-        quant_int_dtype: torch.dtype = torch.int32,
-        quant_float_dtype: torch.dtype = torch.float32,
     ):
 
         """
@@ -282,8 +275,6 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             out_quant_channel_wise:         {out_quant_channel_wise}\n\
             out_quant_args:                 {out_quant_args}\n\
             out_quant_kargs:                {out_quant_kargs}\n\
-            quant_int_dtype:                {quant_int_dtype}\n\
-            quant_float_dtype:              {quant_float_dtype}\n\
             ",
         )
 
@@ -313,7 +304,6 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                 (-1,) if not out_quant_channel_wise else (1, num_features, 1, 1),
                 0.1,
                 "floor",
-                quant_int_dtype,
             )
         LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.__init__: out_quant_args", out_quant_args)
 
@@ -322,11 +312,6 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         else:
             self.out_quant = out_quant
         LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.__init__: self.out_quant", self.out_quant)
-
-        self.quant_int_dtype = quant_int_dtype
-        LOG(__LOG_LEVEL_TO_MUCH__, f"BatchNorm2d.__init__: self.quant_int_dtype", self.quant_int_dtype)
-        self.quant_float_dtype = quant_float_dtype
-        LOG(__LOG_LEVEL_TO_MUCH__, f"BatchNorm2d.__init__: self.quant_float_dtype", self.quant_float_dtype)
 
     def get_weight_factor(self):
         """
@@ -355,25 +340,24 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             if __HIGH_PRES__:
                 xorig = x.data.clone().detach()
 
-            if x.dtype == self.quant_int_dtype:
-                x = super().forward(x.type(self.quant_float_dtype))
-            else:
-                x = super().forward(x)
+            x = super().forward(x)
             LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post super().forward", x)
 
             if not __HIGH_PRES__:
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post quant", x)
-                x = self.out_quant(x,False)
+                x = self.out_quant(x, False)
             else:
-                x = self.out_quant(x,True)
+                x = self.out_quant(x, True)
                 with torch.no_grad():
                     # mu = self.running_mean.clone()
                     # var = self.running_var.clone()
 
                     var = torch.var(x, [0, 2, 3], unbiased=False, keepdim=True)
-                    mu  = torch.mean(x,[0,2,3], keepdim=True)
+                    mu = torch.mean(x, [0, 2, 3], keepdim=True)
 
-                    n = self.weight.abs().view(-1)/ (self.out_quant.delta_in.view(-1) * torch.sqrt(var.view(-1) + self.eps))
+                    n = self.weight.abs().view(-1) / (
+                        self.out_quant.delta_in.view(-1) * torch.sqrt(var.view(-1) + self.eps)
+                    )
                     nr = self.func_n(
                         weight=torch.abs(self.weight.view(-1)),
                         bias=self.bias.view(-1),
@@ -396,7 +380,13 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                     t = t.div(tmp).floor()
                     t = t.mul(tmp)
 
-                    xorig = xorig.mul_(n.view(1,-1,1,1)).add_(t.view(1,-1,1,1)).floor_().clamp_(min=self.out_quant.min,max=self.out_quant.max).mul_(self.out_quant.delta_out)
+                    xorig = (
+                        xorig.mul_(n.view(1, -1, 1, 1))
+                        .add_(t.view(1, -1, 1, 1))
+                        .floor_()
+                        .clamp_(min=self.out_quant.min, max=self.out_quant.max)
+                        .mul_(self.out_quant.delta_out)
+                    )
                     x.data = xorig
 
             rexp = torch.log2(self.out_quant.delta_out)
@@ -425,7 +415,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                 ).detach()
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: t", t)
 
-                tmp = torch.exp2(self.n.type(self.quant_float_dtype))
+                tmp = torch.exp2(self.n)
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: tmp", tmp)
 
                 self.t = t.div(tmp).floor()
@@ -434,7 +424,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post add", x)
                 x = x.mul(tmp[None, :, None, None])
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post shift", x)
-                x = x.floor().type(self.quant_int_dtype)
+                x = x.floor()
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post floor", x)
                 x = x.clamp(self.out_quant.min, self.out_quant.max)
                 LOG(__LOG_LEVEL_HIGH_DETAIL__, "BatchNorm2d.forward: x post clamp", x)
