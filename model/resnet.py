@@ -13,6 +13,8 @@ from .convolution import Conv2d
 from .batchnorm import BatchNorm2d
 from .activations import PACT_fused, PACT_fused_2, PACT_fused_F8NET_mod, ReLU, ReLU_F8NET_fused
 from .layer import AddQAT, MaxPool2d, Start, Stop, AdaptiveAvgPool2d, Flatten
+from .Linear import LinQuantWeight_mod_F8NET as Lin_Weight_quant_mod_F8NET
+from .convolution import LinQuantWeight_mod_F8NET as Conv_Weight_quant_mod_F8NET
 from .Linear import Linear
 from .utils import checkNan, checkNanTuple
 
@@ -32,8 +34,9 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
         groups=groups,
         bias=False,
         dilation=dilation,
-        weight_quant_bits=8,
-        weight_quant_channel_wise=True,
+        # weight_quant_bits=8,
+        # weight_quant_channel_wise=True,
+        weight_quant=Conv_Weight_quant_mod_F8NET(bits=8,size=(1,out_planes,1,1)),
         out_quant_bits=8,
         out_quant_channel_wise=True,
     )
@@ -47,10 +50,19 @@ def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> Conv2d:
         kernel_size=1,
         stride=stride,
         bias=False,
-        weight_quant_bits=8,
-        weight_quant_channel_wise=True,
+        # weight_quant_bits=8,
+        # weight_quant_channel_wise=True,
+        weight_quant=Conv_Weight_quant_mod_F8NET(bits=8,size=(1,out_planes,1,1)),
         out_quant_bits=8,
         out_quant_channel_wise=True,
+    )
+
+def LinearHelper(features_in,features_out):
+    return Linear(
+        features_in,
+        features_out,
+        weight_quant=Lin_Weight_quant_mod_F8NET(bits=8,size=(1,features_out)),
+        out_quant=F8NetQuant(bits=16, size=(1, features_out))
     )
 
 
@@ -280,13 +292,7 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
 
         self.avgpool = AdaptiveAvgPool2d((1, 1))
-        self.fc = Linear(
-            512 * block.expansion,
-            num_classes,
-            weight_quant_channel_wise=True,
-            out_quant_channel_wise=True,
-            out_quant_bits=16,
-        )
+        self.fc = LinearHelper(512 * block.expansion,num_classes)
 
         self.start = Start(8)
         self.stop = Stop((1, num_classes))
