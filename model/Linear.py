@@ -133,7 +133,7 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
         if self.training:
             with torch.no_grad():
-                sigma = torch.var(x* (rexp_diff.view(1, -1)),[0],unbiased=False,keepdim=True).add(1e-5).sqrt()
+                sigma = torch.var(x* (rexp_diff.view(1, -1)),self.reducelist,unbiased=False,keepdim=True).add(1e-5).sqrt()
                 
                 self.delta_in = sigma.mul(self.delta_in_factor) 
                 self.delta_out = sigma.mul(self.delta_in_factor)

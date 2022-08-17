@@ -159,7 +159,10 @@ def calculate_alpha(
     :rtype: torch.Tensor
     """
     with torch.no_grad():
-        n = torch.log2(weight.abs() * rexp.view(-1) / (out_quant * torch.sqrt(var + 1e-5)))
+        n = weight.abs() * rexp.view(-1)
+        n = n.div_(out_quant).div_(torch.sqrt(var + 1e-5))
+        n = n.log2_()
+        # n = torch.log2(weight.abs() * rexp.view(-1) / (out_quant * torch.sqrt(var + 1e-5)))
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_alpha: n", n)
         nr = torch.ceil(n)
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_alpha: nr", nr)

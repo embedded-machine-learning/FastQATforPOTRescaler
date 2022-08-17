@@ -23,6 +23,33 @@ from .utils import checkNan, checkNanTuple
 ####################################################################################
 
 
+def convnxn(
+    in_planes: int,
+    out_planes: int,
+    kernel_size: int,
+    stride: int = 1,
+    groups: int = 1,
+    dilation: int = 1,
+    padding: int = 0,
+) -> Conv2d:
+    """3x3 convolution with padding"""
+    return Conv2d(
+        in_planes,
+        out_planes,
+        kernel_size=kernel_size,
+        stride=stride,
+        padding=padding,
+        groups=groups,
+        bias=False,
+        dilation=dilation,
+        # weight_quant_bits=8,
+        # weight_quant_channel_wise=True,
+        weight_quant=Conv_Weight_quant_mod_F8NET(bits=8, size=(out_planes, 1, 1, 1)),
+        out_quant_bits=8,
+        out_quant_channel_wise=True,
+    )
+
+
 def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> Conv2d:
     """3x3 convolution with padding"""
     return Conv2d(
@@ -36,7 +63,7 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
         dilation=dilation,
         # weight_quant_bits=8,
         # weight_quant_channel_wise=True,
-        weight_quant=Conv_Weight_quant_mod_F8NET(bits=8,size=(1,out_planes,1,1)),
+        weight_quant=Conv_Weight_quant_mod_F8NET(bits=8, size=(out_planes, 1, 1, 1)),
         out_quant_bits=8,
         out_quant_channel_wise=True,
     )
@@ -52,17 +79,18 @@ def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> Conv2d:
         bias=False,
         # weight_quant_bits=8,
         # weight_quant_channel_wise=True,
-        weight_quant=Conv_Weight_quant_mod_F8NET(bits=8,size=(1,out_planes,1,1)),
+        weight_quant=Conv_Weight_quant_mod_F8NET(bits=8, size=(out_planes, 1, 1, 1)),
         out_quant_bits=8,
         out_quant_channel_wise=True,
     )
 
-def LinearHelper(features_in,features_out):
+
+def LinearHelper(features_in, features_out):
     return Linear(
         features_in,
         features_out,
-        weight_quant=Lin_Weight_quant_mod_F8NET(bits=8,size=(1,features_out)),
-        out_quant=F8NetQuant(bits=16, size=(1, features_out))
+        weight_quant=Lin_Weight_quant_mod_F8NET(bits=8, size=(features_out, 1)),
+        out_quant=F8NetQuant(bits=16, size=(1, features_out)),
     )
 
 
@@ -143,7 +171,7 @@ class BasicBlock(nn.Module):
         self.bn1 = norm_layer(planes, out_quant=default_fused_Activation(planes))
         # self.relu = ReLU(inplace=False)
         self.conv2 = conv3x3(planes, planes)
-        self.bn2 = norm_layer(planes,out_quant=default_Quant(planes))
+        self.bn2 = norm_layer(planes, out_quant=default_Quant(planes))
         self.downsample = downsample
         self.stride = stride
         self.add = ADDwPACT(planes)
@@ -204,7 +232,7 @@ class Bottleneck(nn.Module):
         self.conv2 = conv3x3(width, width, stride, groups, dilation)
         self.bn2 = norm_layer(width, out_quant=default_fused_Activation(width))
         self.conv3 = conv1x1(width, planes * self.expansion)
-        self.bn3 = norm_layer(planes * self.expansion,out_quant=default_Quant(planes * self.expansion))
+        self.bn3 = norm_layer(planes * self.expansion, out_quant=default_Quant(planes * self.expansion))
         # self.relu = ReLU(inplace=False)
         self.downsample = downsample
         self.stride = stride
@@ -273,16 +301,8 @@ class ResNet(nn.Module):
             )
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = Conv2d(
-            3,
-            self.inplanes,
-            kernel_size=7,
-            stride=2,
-            padding=3,
-            bias=False,
-            weight_quant_bits=8,
-            weight_quant_channel_wise=True,
-        )
+        self.conv1 = convnxn(in_planes=3, out_planes=self.inplanes, kernel_size=7, stride=2, padding=3)
+
         self.bn1 = norm_layer(self.inplanes, out_quant=default_fused_Activation(self.inplanes))
         # self.relu = ReLU(inplace=False)
         self.maxpool = MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -292,7 +312,7 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
 
         self.avgpool = AdaptiveAvgPool2d((1, 1))
-        self.fc = LinearHelper(512 * block.expansion,num_classes)
+        self.fc = LinearHelper(512 * block.expansion, num_classes)
 
         self.start = Start(8)
         self.stop = Stop((1, num_classes))

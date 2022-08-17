@@ -134,18 +134,21 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
         if self.training:
             with torch.no_grad():
-                sigma = torch.var(x* (rexp_diff.view(1, -1, 1, 1)),[0,2,3],unbiased=False,keepdim=True).add(1e-5).sqrt()
+                sigma = torch.var(x* (rexp_diff.view(1, -1, 1, 1)),self.reducelist,unbiased=False,keepdim=True).add_(1e-5).sqrt_()
                 
-                self.delta_in = sigma.mul(self.delta_in_factor) 
-                self.delta_out = sigma.mul(self.delta_in_factor)
+                self.delta_in = sigma.mul_(self.delta_in_factor)    # delta in and delta out identical
+                self.delta_out.data = self.delta_in
+                # self.delta_out = sigma#.mul(self.delta_in_factor)
 
                 fact = fact_fun(self.delta_out * rexp_mean).view(-1, 1, 1, 1)
+
+                delta_for_quant = self.delta_in.div(rexp_diff.view(1, -1, 1, 1)).div_(fact)
 
         return (
             FakeQuant(
                 x=x.clone(),
-                delta_in=self.delta_in / ((rexp_diff.view(1, -1, 1, 1) * fact)),
-                delta_out=self.delta_out / ((rexp_diff.view(1, -1, 1, 1) * fact)),
+                delta_in=delta_for_quant,
+                delta_out=delta_for_quant,
                 training=self.training,
                 min_quant=self.min,
                 max_quant=self.max,

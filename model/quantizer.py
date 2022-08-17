@@ -263,6 +263,7 @@ class Quant(nn.Module):
         LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: simple", self.simple)
 
         self.permutelist = []
+        self.reducelist = []
         self.numberofdims = 0
         for i in range(len(size)):
             # print(size[i])
@@ -271,6 +272,7 @@ class Quant(nn.Module):
                 self.numberofdims += 1
             else:
                 self.permutelist.append(i)
+                self.reducelist.append(i)
 
         LOG(__LOG_LEVEL_DEBUG__, "Quant.__init: numberofdims", self.numberofdims)
         self.permutelist = tuple(self.permutelist)
@@ -372,10 +374,12 @@ class F8NetQuant(Quant):
     def forward(self, x: torch.Tensor,fake:bool = False):
         if self.training:
             with torch.no_grad():
-                sigma = torch.var(x,[0,2,3],unbiased=False,keepdim=True).add(1e-5).sqrt()
+                sigma = torch.var(x,self.reducelist,unbiased=False,keepdim=True)
+                sigma = sigma.add_(1e-5).sqrt_()
                 
-                self.delta_in = sigma.mul(self.delta_in_factor).log2().ceil().exp2().detach()  
-                self.delta_out = sigma.mul(self.delta_in_factor).log2().ceil().exp2().detach()  
+                self.delta_in = sigma.mul_(self.delta_in_factor).log2_().ceil_().exp2_().detach_()  
+                self.delta_out.data = self.delta_in     # delta in and delta out identical
+                # self.delta_out = sigma.mul(self.delta_in_factor).log2().ceil().exp2().detach()  
         return super().forward(x,fake)
 
 
