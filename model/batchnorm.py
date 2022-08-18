@@ -415,14 +415,14 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                 ).detach()
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: t", t)
 
-                tmp = torch.exp2(self.n)
+                tmp = torch.exp2(self.n.view(1,-1,1,1))
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: tmp", tmp)
 
-                self.t = t.div(tmp).floor()
+                self.t = t.view(1,-1,1,1).div(tmp).floor()
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: self.t", self.t)
-                x = x + self.t[None, :, None, None]
+                x = x + self.t
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post add", x)
-                x = x.mul(tmp[None, :, None, None])
+                x = x.mul(tmp.view(1,-1,1,1))
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post shift", x)
                 x = x.floor()
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post floor", x)
