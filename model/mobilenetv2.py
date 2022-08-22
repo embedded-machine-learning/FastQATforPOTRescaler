@@ -52,6 +52,7 @@ def Lin(in_features: int, out_features: int, bias: bool = True):
         bias=bias,
         weight_quant=Lin_Weight_quant_mod_F8NET(bits=8, size=(out_features, 1)),
         out_quant=F8NetQuant(bits=16, size=(1, out_features)),
+        out_quant_channel_wise=True
     )
 
 
