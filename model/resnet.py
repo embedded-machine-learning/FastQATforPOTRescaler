@@ -91,6 +91,7 @@ def LinearHelper(features_in, features_out):
         features_out,
         weight_quant=Lin_Weight_quant_mod_F8NET(bits=8, size=(features_out, 1)),
         out_quant=F8NetQuant(bits=16, size=(1, features_out)),
+        out_quant_channel_wise = True
     )
 
 

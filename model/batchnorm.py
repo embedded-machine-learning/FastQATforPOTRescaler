@@ -349,8 +349,8 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             else:
                 x = self.out_quant(x, True)
                 with torch.no_grad():
-                    # mu = self.running_mean.clone()
-                    # var = self.running_var.clone()
+                    #mu = self.running_mean.clone()
+                    #var = self.running_var.clone()
 
                     var = torch.var(x, [0, 2, 3], unbiased=False, keepdim=True)
                     mu = torch.mean(x, [0, 2, 3], keepdim=True)

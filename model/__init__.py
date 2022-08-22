@@ -1,4 +1,4 @@
-__HIGH_PRES__ = False
+__HIGH_PRES__ = True
 """
 Enables high precision mode, network will take longer and will need more memory 
 """
