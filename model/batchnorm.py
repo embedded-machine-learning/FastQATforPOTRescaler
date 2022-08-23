@@ -24,6 +24,7 @@ from . import (
     __LOG_LEVEL_HIGH_DETAIL__,
     __LOG_LEVEL_TO_MUCH__,
     __HIGH_PRES__,
+    __HIGH_PRES_USE_RUNNING__,
 )
 
 
@@ -349,11 +350,12 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             else:
                 x = self.out_quant(x, True)
                 with torch.no_grad():
-                    #mu = self.running_mean.clone()
-                    #var = self.running_var.clone()
-
-                    var = torch.var(x, [0, 2, 3], unbiased=False, keepdim=True)
-                    mu = torch.mean(x, [0, 2, 3], keepdim=True)
+                    if __HIGH_PRES_USE_RUNNING__:
+                        mu = self.running_mean.clone()
+                        var = self.running_var.clone()
+                    else:
+                        var = torch.var(x, [0, 2, 3], unbiased=False, keepdim=True)
+                        mu = torch.mean(x, [0, 2, 3], keepdim=True)
 
                     n = self.weight.abs().view(-1) / (
                         self.out_quant.delta_in.view(-1) * torch.sqrt(var.view(-1) + self.eps)
@@ -415,14 +417,14 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                 ).detach()
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: t", t)
 
-                tmp = torch.exp2(self.n.view(1,-1,1,1))
+                tmp = torch.exp2(self.n.view(1, -1, 1, 1))
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: tmp", tmp)
 
-                self.t = t.view(1,-1,1,1).div(tmp).floor()
+                self.t = t.view(1, -1, 1, 1).div(tmp).floor()
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: self.t", self.t)
                 x = x + self.t
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post add", x)
-                x = x.mul(tmp.view(1,-1,1,1))
+                x = x.mul(tmp.view(1, -1, 1, 1))
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post shift", x)
                 x = x.floor()
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post floor", x)
