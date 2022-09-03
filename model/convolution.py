@@ -133,7 +133,7 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
         with torch.no_grad():
             sigma = (
                 torch.var(x * (rexp_diff.view(*self.rexp_view)), self.reducelist, unbiased=False, keepdim=True)
-                .add_(1e-5)
+                # .add_(1e-5)
                 .sqrt_()
             )
 
@@ -141,7 +141,7 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
             self.delta_out.data = self.delta_in
             # self.delta_out = sigma#.mul(self.delta_in_factor)
 
-            fact = fact_fun(self.delta_out * rexp_mean).view(-1, 1, 1, 1)
+            fact = fact_fun(self.delta_out * rexp_mean.view(-1,1,1,1)).view(-1, 1, 1, 1)
 
             delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
 
@@ -325,6 +325,9 @@ class Conv2d(nn.Conv2d):
             self.debug_bias = []
             self.debug_n = []
 
+        self.register_buffer("rexp_diff", torch.zeros((1, in_channels, 1, 1)))
+        LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: rexp_diff buffer", self.rexp_diff)
+
     def get_weight_factor(self, delta_O: Tensor):
         """
         get_weight_factor returns a calculation function for the weight scaling
@@ -388,10 +391,17 @@ class Conv2d(nn.Conv2d):
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward input", input)
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward rexp", rexp)
 
-        rexp_mean = (torch.mean(rexp)).squeeze()
-        LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward rexp_mean", rexp_mean)
-        rexp_diff = rexp.squeeze() - rexp_mean.unsqueeze(-1)
-        LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward rexp_diff", rexp_diff)
+
+        if self.layer_wise:
+            rexp_mean = rexp.clone().detach()
+            LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward rexp_mean", rexp_mean)
+            self.rexp_diff = rexp - rexp_mean
+            LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward rexp_diff", self.rexp_diff)
+        else:
+            rexp_mean = (torch.mean(rexp)).squeeze()
+            LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward rexp_mean", rexp_mean)
+            self.rexp_diff = rexp.squeeze() - rexp_mean.unsqueeze(-1) 
+            LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward rexp_diff", self.rexp_diff)
 
         weight = self.weight.clone()
 
@@ -399,14 +409,14 @@ class Conv2d(nn.Conv2d):
             weight, fact = self.weight_quant(
                 weight,
                 rexp_mean.exp2(),
-                rexp_diff.exp2(),
+                self.rexp_diff.exp2(),
                 self.get_weight_factor(self.out_quant.delta_in.view(-1).detach()),
             )
         else:
             weight, fact = self.weight_quant(
                 weight,
                 rexp_mean.exp2(),
-                rexp_diff.exp2(),
+                self.rexp_diff.exp2(),
                 factor_fun,
             )
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward weight", weight)
@@ -474,4 +484,4 @@ class Conv2d(nn.Conv2d):
             LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward out2", out2)
             return out2, torch.log2(self.out_quant.delta_out.detach())
         else:
-            return out, rexp_mean + self.weight_quant.delta_out.log2().detach().view(1, -1, 1, 1)
+            return out, rexp_mean + (self.weight_quant.delta_out.log2().detach().view(1, -1, 1, 1))

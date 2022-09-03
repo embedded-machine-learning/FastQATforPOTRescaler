@@ -131,7 +131,7 @@ def calculate_t(
     :rtype: Tensor
     """
     with torch.no_grad():
-        t = -mean * (weight.abs() / (out_quant * torch.sqrt(var + 1e-5))) + bias / out_quant
+        t = -mean * (weight / (out_quant * torch.sqrt(var + 1e-5))) + bias / out_quant
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_t: t", t)
         return t
 
