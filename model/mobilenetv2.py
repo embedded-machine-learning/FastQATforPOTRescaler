@@ -41,7 +41,7 @@ def Conv(
         dilation=dilation,
         groups=groups,
         bias=False,
-        weight_quant=Conv_Weight_quant_mod_F8NET(bits=8, size=(out_channels, 1, 1, 1),layer_wise=(out_channels==groups)),
+        weight_quant=Conv_Weight_quant_mod_F8NET(bits=8, size=(1 if out_channels==groups else out_channels, 1, 1, 1),layer_wise=(out_channels==groups)),
     )
 
 
