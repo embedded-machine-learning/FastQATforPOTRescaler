@@ -57,13 +57,13 @@ def Lin(in_features: int, out_features: int, bias: bool = True):
 
 
 def PACT_F8NET(features):
-    return PACT_fused_F8NET_mod(bits=8, size=(1, 1, 1, 1))
-    # return PACT_fused_F8NET_mod(bits=8, size=(1, features, 1, 1))
+    # return PACT_fused_F8NET_mod(bits=8, size=(1, 1, 1, 1))
+    return PACT_fused_F8NET_mod(bits=8, size=(1, features, 1, 1))
 
 
 def F8NET_Quant(features):
-    return F8NetQuant(bits=8, size=(1, 1, 1, 1))
-    # return F8NetQuant(bits=8, size=(1, features, 1, 1))
+    # return F8NetQuant(bits=8, size=(1, 1, 1, 1))
+    return F8NetQuant(bits=8, size=(1, features, 1, 1))
 
 
 def default_Quant(features):
