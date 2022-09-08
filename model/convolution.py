@@ -392,6 +392,12 @@ class Conv2d(nn.Conv2d):
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "Conv2dQuant.forward rexp", rexp)
 
 
+        # Questinable follows
+        if self.training and self.layer_wise:
+            self.weight.data = self.weight.data-self.weight.data.mean((1,2,3),keepdim=True) 
+        # Done
+
+
         if self.layer_wise:
             rexp_mean = rexp.clone().detach()
             LOG(__LOG_LEVEL_TO_MUCH__, "Conv2dQuant.forward rexp_mean", rexp_mean)
