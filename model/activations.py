@@ -230,7 +230,8 @@ class PACT_fused_F8NET_mod(Quant):
         self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones(size)))
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
         self.register_buffer("alpha_used", torch.zeros_like(self.alpha))
-        self.register_buffer("clamp_min", torch.Tensor([1e-3]))
+        self.register_buffer("alpha_min", torch.Tensor([1e-3]))
+        self.register_buffer("alpha_max", torch.Tensor([8]))
 
 
         nn.init.constant_(self.min, 0)
@@ -242,7 +243,8 @@ class PACT_fused_F8NET_mod(Quant):
                 # self.alpha_used = self.alpha.clone()  # block 2 small and negative alpha
                 # self.alpha_used = self.alpha_used.clamp(min=1e-3)  # block 2 small and negative alpha
 
-                self.alpha_used= self.alpha.clamp(min=self.clamp_min)
+                # self.alpha_used= self.alpha.clamp(min=self.alpha_min,max = self.alpha_max)
+                self.alpha_used= self.alpha.clamp(min=self.alpha_min)
 
                 sigma = torch.var(x, self.reducelist, unbiased=False, keepdim=True).add(1e-5).sqrt()
 

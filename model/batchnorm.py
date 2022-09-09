@@ -62,7 +62,7 @@ def calculate_n(
     with torch.no_grad():
         n = torch.log2(weight.abs() / (out_quant * torch.sqrt(var + 1e-5))) + rexp.view(-1)
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_n: n", n)
-        n = n.ceil().clamp(max=0)
+        n = n.ceil()
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "calculate_n: n post ceil", n)
         return n
 

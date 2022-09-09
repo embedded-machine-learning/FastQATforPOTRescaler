@@ -324,8 +324,10 @@ class Conv2d(nn.Conv2d):
             self.debug_weight = []
             self.debug_bias = []
             self.debug_n = []
-
-        self.register_buffer("rexp_diff", torch.zeros((1, in_channels, 1, 1)))
+        if in_channels==3:
+            self.register_buffer("rexp_diff", torch.zeros((1)))
+        else:
+            self.register_buffer("rexp_diff", torch.zeros( (1,in_channels,1,1) if self.layer_wise else (in_channels)))
         LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: rexp_diff buffer", self.rexp_diff)
 
     def get_weight_factor(self, delta_O: Tensor):
@@ -394,7 +396,11 @@ class Conv2d(nn.Conv2d):
 
         # Questinable follows
         if self.training and self.layer_wise:
-            self.weight.data = self.weight.data-self.weight.data.mean((1,2,3),keepdim=True) 
+        # if self.training :
+            mean = self.weight.data.mean((1,2,3),keepdim=True)
+            var  = self.weight.data.var((1,2,3),keepdim=True).add(1e-5).sqrt()
+            mod = (mean.sign())*((torch.abs(mean)-var).clamp(min=0))
+            self.weight.data = self.weight.data - mod
         # Done
 
 
