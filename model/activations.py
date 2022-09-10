@@ -227,7 +227,7 @@ class PACT_fused_F8NET_mod(Quant):
         self.register_buffer("value_helper", torch.tensor(70.0 / (2**self.bits - 1)))
         self.register_buffer("max_helper", torch.tensor(2**self.bits - 1))
 
-        self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones(size)))
+        self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones((1,1))))
         LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
         self.register_buffer("alpha_used", torch.zeros_like(self.alpha))
         self.register_buffer("alpha_min", torch.Tensor([1e-3]))
