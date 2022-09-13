@@ -367,7 +367,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
 
                 tmp = torch.exp2(nr.view(1, -1, 1, 1))
 
-                t = t.view(1, -1, 1, 1).div(tmp).floor().mul(tmp)
+                t = t.view(1, -1, 1, 1).div(tmp).floor().mul(tmp).mul(self.out_quant.delta_in.view(1,-1,1,1))
                 x.data = x.data - (self.bias.view(1,-1,1,1)-t)  
 
             if not __HIGH_PRES__:
