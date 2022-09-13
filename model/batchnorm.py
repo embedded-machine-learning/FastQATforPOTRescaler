@@ -358,7 +358,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                 t = self.func_t(
                     weight=self.weight.view(-1),
                     bias=self.bias.view(-1),
-                    mean=self.running_mean.view(-1),
+                    mean=0,
                     var=self.running_var.view(-1),
                     out_quant=self.out_quant.delta_in.view(-1),
                     rexp=rexp.view(-1),
