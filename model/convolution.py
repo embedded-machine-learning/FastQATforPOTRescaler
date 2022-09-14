@@ -1,3 +1,5 @@
+#math
+import math
 # Generic Type imports
 from types import FunctionType
 from typing import Union, Tuple
@@ -330,6 +332,9 @@ class Conv2d(nn.Conv2d):
             self.register_buffer("rexp_diff", torch.zeros( (1,in_channels,1,1) if self.layer_wise else (in_channels)))
         LOG(__LOG_LEVEL_TO_MUCH__, f"LinQuantWeight.__init__: rexp_diff buffer", self.rexp_diff)
 
+        sh = self.weight.shape
+        self.sh_prod=sh[1]*sh[2]*sh[3]
+
     def get_weight_factor(self, delta_O: Tensor):
         """
         get_weight_factor returns a calculation function for the weight scaling
@@ -404,7 +409,7 @@ class Conv2d(nn.Conv2d):
 
         if self.training:
             var  = self.weight.data.var((1,2,3),keepdim=True).add(1e-5).sqrt()
-            self.weight.data = self.weight.data/(var.sqrt())
+            self.weight.data = self.weight.data/(math.sqrt(self.sh_prod)*var)
         # Done
 
 

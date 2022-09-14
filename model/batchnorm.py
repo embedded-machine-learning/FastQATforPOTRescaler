@@ -344,6 +344,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             x = super().forward(x)
             LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post super().forward", x)
 
+            # remove this after mbv2
             with torch.no_grad():
                 nr = self.func_n(
                     weight=torch.abs(self.weight.view(-1)),
@@ -369,6 +370,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
 
                 t = t.view(1, -1, 1, 1).div(tmp).floor().mul(tmp).mul(self.out_quant.delta_in.view(1,-1,1,1))
                 x.data = x.data - (self.bias.view(1,-1,1,1)-t)  
+            #upto here
 
             if not __HIGH_PRES__:
                 LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post quant", x)
