@@ -401,6 +401,10 @@ class Conv2d(nn.Conv2d):
             var  = self.weight.data.var((1,2,3),keepdim=True).add(1e-5).sqrt()
             mod = (mean.sign())*((torch.abs(mean)-var).clamp(min=0))
             self.weight.data = self.weight.data - mod
+
+        if self.training:
+            var  = self.weight.data.var((1,2,3),keepdim=True).add(1e-5).sqrt()
+            self.weight.data = self.weight.data/(var.sqrt())
         # Done
 
 
