@@ -345,31 +345,31 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: x post super().forward", x)
 
             # remove this after mbv2
-            with torch.no_grad():
-                nr = self.func_n(
-                    weight=torch.abs(self.weight.view(-1)),
-                    bias=self.bias.view(-1),
-                    mean=self.running_mean.view(-1),
-                    var=self.running_var.view(-1),
-                    out_quant=self.out_quant.delta_in.view(-1),
-                    rexp=rexp.view(-1),
-                ).detach()
-                LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: self.n", self.n)
+            # with torch.no_grad():
+            #     nr = self.func_n(
+            #         weight=torch.abs(self.weight.view(-1)),
+            #         bias=self.bias.view(-1),
+            #         mean=self.running_mean.view(-1),
+            #         var=self.running_var.view(-1),
+            #         out_quant=self.out_quant.delta_in.view(-1),
+            #         rexp=rexp.view(-1),
+            #     ).detach()
+            #     LOG(__LOG_LEVEL_TO_MUCH__, "BatchNorm2d.forward: self.n", self.n)
 
-                t = self.func_t(
-                    weight=self.weight.view(-1),
-                    bias=self.bias.view(-1),
-                    mean=0,
-                    var=self.running_var.view(-1),
-                    out_quant=self.out_quant.delta_in.view(-1),
-                    rexp=rexp.view(-1),
-                    n=self.n.view(-1),
-                ).detach()
+            #     t = self.func_t(
+            #         weight=self.weight.view(-1),
+            #         bias=self.bias.view(-1),
+            #         mean=0,
+            #         var=self.running_var.view(-1),
+            #         out_quant=self.out_quant.delta_in.view(-1),
+            #         rexp=rexp.view(-1),
+            #         n=self.n.view(-1),
+            #     ).detach()
 
-                tmp = torch.exp2(nr.view(1, -1, 1, 1))
+            #     tmp = torch.exp2(nr.view(1, -1, 1, 1))
 
-                t = t.view(1, -1, 1, 1).div(tmp).floor().mul(tmp).mul(self.out_quant.delta_in.view(1,-1,1,1))
-                x.data = x.data - (self.bias.view(1,-1,1,1)-t)  
+            #     t = t.view(1, -1, 1, 1).div(tmp).floor().mul(tmp).mul(self.out_quant.delta_in.view(1,-1,1,1))
+            #     x.data = x.data - (self.bias.view(1,-1,1,1)-t)  
             #upto here
 
             if not __HIGH_PRES__:

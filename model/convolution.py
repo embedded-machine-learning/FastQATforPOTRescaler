@@ -400,16 +400,16 @@ class Conv2d(nn.Conv2d):
 
 
         # Questinable follows
-        if self.training and self.layer_wise:
-        # if self.training :
-            mean = self.weight.data.mean((1,2,3),keepdim=True)
-            var  = self.weight.data.var((1,2,3),keepdim=True).add(1e-5).sqrt()
-            mod = (mean.sign())*((torch.abs(mean)-var).clamp(min=0))
-            self.weight.data = self.weight.data - mod
+        # if self.training and self.layer_wise:
+        # # if self.training :
+        #     mean = self.weight.data.mean((1,2,3),keepdim=True)
+        #     var  = self.weight.data.var((1,2,3),keepdim=True).add(1e-5).sqrt()
+        #     mod = (mean.sign())*((torch.abs(mean)-var).clamp(min=0))
+        #     self.weight.data = self.weight.data - mod
 
-        if self.training:
-            var  = self.weight.data.var((1,2,3),keepdim=True).add(1e-5).sqrt()
-            self.weight.data = self.weight.data/(math.sqrt(self.sh_prod)*var)
+        # if self.training:
+        #     var  = self.weight.data.var((1,2,3),keepdim=True).add(1e-5).sqrt()
+        #     self.weight.data = self.weight.data/(math.sqrt(self.sh_prod)*var)
         # Done
 
 

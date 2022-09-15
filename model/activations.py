@@ -248,8 +248,8 @@ class PACT_fused_F8NET_mod(Quant):
 
                 sigma = torch.var(x, self.reducelist, unbiased=False, keepdim=True).add(1e-5).sqrt()
 
-                # sigma = sigma.clamp(max=(self.alpha_used * self.value_helper))
-                sigma = self.alpha_used * self.value_helper
+                sigma = sigma.clamp(max=(self.alpha_used * self.value_helper))
+                # sigma = self.alpha_used * self.value_helper
 
                 self.delta_in = sigma.mul(self.delta_in_factor).log2().ceil().exp2().detach()       # floor became ceil bc. it is iverted pre log therefore times -1 therefore ceil
                 self.delta_out = sigma.mul(self.delta_in_factor).log2().ceil().exp2().detach()
