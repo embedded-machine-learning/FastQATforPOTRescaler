@@ -138,8 +138,16 @@ class Stop(nn.Module):
         LOG(__LOG_LEVEL_TO_MUCH__, "Stop.__init: buffer for_dtype", self.for_dtype)
 
     def forward(self, invals: Tuple[Tensor, Tensor]) -> Tensor:
+        x,rexp = invals
         self.exp = invals[1].detach().clone()
-        x = Stopfn.apply(invals[0], invals[1], self.training, self.for_dtype.dtype)
+        # x = Stopfn.apply(invals[0], invals[1], self.training, self.for_dtype.dtype)
+        with torch.no_grad():
+            if not self.training:
+                shape = [1 for _ in range(len(x.shape))]
+                shape[1] = -1
+                LOG(__LOG_LEVEL_HIGH_DETAIL__, "Stopfn.forward: shape", shape)
+                x = x.type(self.for_dtype.dtype).mul_(rexp.exp2().view(*shape))
+                LOG(__LOG_LEVEL_HIGH_DETAIL__, "Stopfn.forward: val", x)
         return x
 
 
