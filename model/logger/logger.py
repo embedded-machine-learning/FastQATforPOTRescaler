@@ -1,21 +1,31 @@
 import inspect
 from operator import index
 import re
+import os
 
 name_length = 50
 result_length = 30
 
 
-def print_line(i, result=None) -> str:
+def print_line(i, result=None, additional_indent: int = 0) -> str:
     line = re.split("(\s+)", i)
     name = line[1] + " ".join(i.split()).replace('"', '\\"')
-    if len(name) >= name_length:
-        name = name[: name_length - 5] + " ... "
+    found_instances = i[:name_length].count('"')
+    if len(name) >= name_length + found_instances:
+        name = name[: name_length + found_instances - 5] + " ... "
 
     if result == None:
-        out = line[1] + f'print(f"{name[:name_length]:<{name_length}}")\n'
+        out = (
+            line[1]
+            + " " * (4 * additional_indent)
+            + f'print(f"{name[:name_length+found_instances]:<{name_length+found_instances}}")\n'
+        )
     else:
-        out = line[1] + f'print(f"{name[:name_length]:<{name_length}}-> {{\'\'.join(str({result}).split())[:{result_length}]}}")\n'
+        out = (
+            line[1]
+            + " " * (4 * additional_indent)
+            + f"print(\"{name[:name_length+found_instances]:<{name_length+found_instances}}-> {{0}}\".format(''.join(str({result}).split())[:{result_length}]))\n"
+        )
     return out
 
 
@@ -36,7 +46,7 @@ def print_custom(string, pre: bool = False, additional_indent=0):
         if pre:
             outstr.append(i)
         outstr.append(
-            line[1] + " " * (4 * additional_indent) + f"print(\"{line[1] + ' '*(4*additional_indent)}{string}\")\n"
+            line[1] + " " * (4 * additional_indent) + f"print(\"{line[1]}{string}\")\n"
         )
         if not pre:
             outstr.append(i)
@@ -45,23 +55,44 @@ def print_custom(string, pre: bool = False, additional_indent=0):
     return func
 
 
-def print_left_of(string):
+def print_left_of(string, pre: bool = True):
     def func(i: str) -> list:
         outstr = []
-        outstr.append(i)
+        if pre:
+            outstr.append(i)
         pos = i.find(string)
+        if "(" in i[:pos]:
+            return [i,]  # early exit to stop priint in brackets
         if "," in i[:pos]:
             outstr.append(print_line(i))
-            for val in re.split("(?:,)",i[:pos]):
-                outstr.append(print_line(i + ":" + val,val))
+            for val in re.split("(?:,)", i[:pos]):
+                outstr.append(print_line(i + ":" + val, val))
         else:
             outstr.append(print_line(i, i[:pos]))
+        if not pre:
+            outstr.append(i)
         return outstr
 
     return func
 
 
-def print_between(start: str, stop: str, prefix=None, pre: bool = False):
+def print_right_of(string, pre: bool = True):
+    def func(i: str) -> list:
+        outstr = []
+        if pre:
+            outstr.append(i)
+        pos = i.find(string) + len(string)
+        outstr.append(print_line(i, " ".join(i[pos:].split())))
+        if not pre:
+            outstr.append(i)
+        return outstr
+
+    return func
+
+
+def print_between(
+    start: str, stop: str, prefix=None, pre: bool = False, result: bool = True, additional_indent: int = 0
+):
     def func(i: str) -> list:
         outstr = []
         pos1 = i.find(start)
@@ -69,11 +100,18 @@ def print_between(start: str, stop: str, prefix=None, pre: bool = False):
         if pre:
             outstr.append(i)
         if prefix == None:
-            outstr.append(print_line(i, i[pos1 + len(start) : pos2]))
+            outstr.append(
+                print_line(i, i[pos1 + len(start) : pos2] if result else None, additional_indent=additional_indent)
+            )
         else:
-            outstr.append(print_line(i, prefix + i[pos1 + len(start) : pos2]))
+            outstr.append(
+                print_line(
+                    i, prefix + i[pos1 + len(start) : pos2] if result else None, additional_indent=additional_indent
+                )
+            )
         if not pre:
             outstr.append(i)
+        # print(outstr, pre)
         return outstr
 
     return func
@@ -82,9 +120,13 @@ def print_between(start: str, stop: str, prefix=None, pre: bool = False):
 class log_class:
     index = 0
     log_level = 0
+    LOGGER_FIILE_PATH = ""
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, LOGGER_FIILE_PATH: str = "") -> None:
+        self.LOGGER_FIILE_PATH = LOGGER_FIILE_PATH
+        if LOGGER_FIILE_PATH != "":
+            if os.path.exists(self.LOGGER_FIILE_PATH):
+                os.remove(self.LOGGER_FIILE_PATH)
 
     def log(self, rules={}):
         def logger(fnc):
@@ -93,20 +135,26 @@ class log_class:
             outstr = []
             indent_pos = 0
             file = inspect.getfile(fnc)
-            # print(inspect.getmembers(fnc))
+            old_line = ""
+            def_triggered = False
             for ip in range(len(code)):
-                i = code[ip]
-                i = i[indent_pos:]
-                found_in_rules = False
-                if i.lstrip()[0] == "#":
+                i = old_line + code[ip][indent_pos:]
+                i = i[: i.rfind("#")]
+                if i.count("(") != i.count(")") or i.count("{") != i.count("}") or i.count("[") != i.count("]"):
+                    old_line = i
                     continue
+                else:
+                    old_line = ""
+                    i = (4 * " ").join(i.split("\t"))
+                    i = " " * (len(i) - len(i.lstrip())) + " ".join(i.split()) + "\n"
+                found_in_rules = False
                 if "@logger" in i:
                     indent_pos = i.find("@")
                     found_in_rules = True
-                if "def" in i:
+                if "def" in i and def_triggered == False:
+                    def_triggered = True
                     found_in_rules = True
                     pos = i.find("(")
-                    pos2 = i.rfind(")")
                     outstr.append(i[:pos] + str(self.index) + i[pos:])
                     fnc_name = fnc.__name__ + str(self.index)
                     self.index += 1
@@ -123,7 +171,9 @@ class log_class:
                         # print(sig)
                         for s in sig.parameters:
                             name = "    " + str(sig.parameters[s])
-                            outstr.append(f'    print(f"{name:<{name_length}}-> {{str({s})[:{result_length}]}}")\n')
+                            addid = name.count('{')+name.count('}')
+                            name = name.replace('{}','{{}}')
+                            outstr.append(f'    print("{name:<{name_length+addid}}-> {{0}}".format(" ".join(str({s}).split())[:{result_length}]))\n')
                         outstr.append(f'    print(f"  CONTENT:")\n')
                         found_in_rules = True
                     continue
@@ -133,22 +183,26 @@ class log_class:
                     # print(sig)
                     for s in sig.parameters:
                         name = "    " + str(sig.parameters[s])
-                        outstr.append(f'    print(f"{name:<{name_length-2}}-> {{str({s})[:{result_length}]}}")\n')
+                        addid = name.count('{')+name.count('}')
+                        name = name.replace('{}','{{}}')
+                        outstr.append(f'    print("{name:<{name_length+addid}}-> {{0}}".format(" ".join(str({s}).split())[:{result_length}]))\n')
                     outstr.append(f'    print(f"  CONTENT:")\n')
                     found_in_rules = True
                     continue
                 for case in rules:
                     if case in i:
+                        # print(case,i)
                         outstr.extend(rules[case](i))
                         found_in_rules = True
                         break
                 if not found_in_rules:
                     outstr.append(i)
-            # print(''.join(outstr))
+            outstr.append(f'    print("  Done with {fnc.__qualname__}")\n')
+            if self.LOGGER_FIILE_PATH != "":
+                with open(self.LOGGER_FIILE_PATH, "a+") as file:
+                    file.write("".join(outstr) + "\n")
+            # print("".join(outstr))
             exec("".join(outstr), fnc.__globals__)
             return eval(fnc_name, fnc.__globals__)
 
         return logger
-
-
-logger = log_class()

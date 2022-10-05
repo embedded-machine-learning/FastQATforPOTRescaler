@@ -10,6 +10,7 @@ from torch.nn.common_types import Tensor
 # Self init
 from . import logger_init, logger_forward
 from .Quantizer import FakeQuant
+from .Type import Data_wrapper
 
 
 class Start(nn.Module):
@@ -23,26 +24,21 @@ class Start(nn.Module):
     """
 
     @logger_init
-    def __init__(self, bits: int) -> None:
+    def __init__(self, size=(1,), bits: int = 8) -> None:
         """
         Please read Class help
         """
-        # LOG(
-        #     __LOG_LEVEL_DEBUG__,
-        #     f"Start passed arguments:\n\
-        #     bits:                           {bits}\n\
-        #     ",
-        # )
         super(Start, self).__init__()
-        self.register_buffer("run", torch.tensor([-bits], dtype=torch.float))
-        self.register_buffer("delta_in", torch.tensor([1.0 / (2.0 ** (-self.run) - 1)]))
-        self.register_buffer("delta_out", torch.tensor([1.0 / (2.0 ** (-self.run))]))
+        self.size = size
+        self.register_buffer("run", (-bits) * torch.ones(size, dtype=torch.float))
+        self.register_buffer("delta_in", torch.clone((1.0 / (2.0 ** (-self.run) - 1))).detach())
+        self.register_buffer("delta_out", torch.clone((1.0 / (2.0 ** (-self.run)))).detach())
         self.register_buffer("max", 2 ** (-self.run - 1) - 1)
         self.register_buffer("min", -(2 ** (-self.run - 1)))
 
     @logger_forward
-    def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
-        return (
+    def forward(self, x: Tensor) -> Data_wrapper:
+        return Data_wrapper(
             FakeQuant(
                 x.clone(),
                 self.delta_in,
@@ -56,11 +52,11 @@ class Start(nn.Module):
         )
 
 
-
 class Stop(nn.Module):
     """
     Stop Return a Tensor pair from the fake-quantized/quantized domain
     """
+
     @logger_init
     def __init__(self, size=(1,)) -> None:
         """
@@ -70,17 +66,14 @@ class Stop(nn.Module):
         self.size = size
         self.register_buffer("exp", torch.zeros(self.size))
         self.register_buffer("for_dtype", torch.zeros(1))  # Only required to know the current datatype
-        
+
     @logger_forward
-    def forward(self, invals: Tuple[Tensor, Tensor]) -> Tensor:
-        x,rexp = invals
-        self.exp = invals[1].detach().clone()
-        # x = Stopfn.apply(invals[0], invals[1], self.training, self.for_dtype.dtype)
+    def forward(self, invals: Data_wrapper) -> Tensor:
+        x, rexp = invals.get()
+        self.exp = rexp.detach().clone()
         with torch.no_grad():
             if not self.training:
                 shape = [1 for _ in range(len(x.shape))]
                 shape[1] = -1
-                # LOG(__LOG_LEVEL_HIGH_DETAIL__, "Stopfn.forward: shape", shape)
                 x = x.type(self.for_dtype.dtype).mul_(rexp.exp2().view(*shape))
-                # LOG(__LOG_LEVEL_HIGH_DETAIL__, "Stopfn.forward: val", x)
         return x
