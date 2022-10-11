@@ -1,6 +1,7 @@
-from ctypes import Union
+from typing import Union
 import torch
 import torch.nn as nn
+import numpy as np
 
 from ..Quantizer import LinQuantExpScale
 
@@ -119,7 +120,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
 
     @logger_forward
     def forward(self, input: Data_wrapper, activation: Union[None, nn.Module] = None) -> Data_wrapper:
-        x, rexp = Data_wrapper.get()
+        x, rexp = input.get()
 
         if activation != None:
             self.out_quant.copy(activation)
@@ -127,11 +128,14 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         else:
             quant = self.out_quant
 
+        # TODO:
+        #   define something to freeze the bn
+
         if self.training:
             if __HIGH_PRES__:
                 xorig = x.data.clone().detach()
 
-            x = super().forward(x)
+            x = super(BatchNorm2d,self).forward(x)
 
             if not __HIGH_PRES__:
                 x = quant(x, False)
@@ -212,4 +216,4 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                     x = torch.nan_to_num(x)
 
                 rexp = torch.log2(quant.delta_out)
-                return x, rexp
+                return input.set(x, rexp)

@@ -137,6 +137,7 @@ class log_class:
             file = inspect.getfile(fnc)
             old_line = ""
             def_triggered = False
+            super_triggered = False
             for ip in range(len(code)):
                 i = old_line + code[ip][indent_pos:]
                 i = i[: i.rfind("#")]
@@ -154,6 +155,7 @@ class log_class:
                 if "def" in i and def_triggered == False:
                     def_triggered = True
                     found_in_rules = True
+                    outstr.append("#def was triggered\n")
                     pos = i.find("(")
                     outstr.append(i[:pos] + str(self.index) + i[pos:])
                     fnc_name = fnc.__name__ + str(self.index)
@@ -177,10 +179,12 @@ class log_class:
                         outstr.append(f'    print(f"  CONTENT:")\n')
                         found_in_rules = True
                     continue
-                if "super" in i:
+                if "super" in i and "__init__" in i and super_triggered == False:
+                    super_triggered = True
                     outstr.append(i)
                     sig = inspect.signature(fnc)
                     # print(sig)
+                    outstr.append("#super was triggered\n")
                     for s in sig.parameters:
                         name = "    " + str(sig.parameters[s])
                         addid = name.count('{')+name.count('}')

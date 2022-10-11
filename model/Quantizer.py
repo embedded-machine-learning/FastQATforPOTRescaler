@@ -90,7 +90,7 @@ class Quant(nn.Module):
         self.delta_out = other.delta_out.clone().detach()
         self.min = other.min.clone().detach()
         self.max = other.max.clone().detach()
-        self.rounding_mode = other.rounding_mode.clone().detach()
+        self.rounding_mode = other.rounding_mode
 
     @logger_forward
     def forward(self, x:Tensor, fake:bool = False):

@@ -1,8 +1,8 @@
 from .logger import log_class, print_all, print_custom, print_right_of
 from .logger import print_left_of, print_between
 
-ENABLE_FORWARD = True
-ENABLE_INIT = True
+ENABLE_FORWARD = False
+ENABLE_INIT = False
 LOGGER_FIILE_PATH = "./logger_redefinitions.py"
 
 
