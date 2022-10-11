@@ -42,8 +42,6 @@ class LinQuantWeight(Quant):
         else:
             self.register_buffer("abs", torch.ones(size))
 
-        self.take_new = True
-
         assert self.bits > 0
         self.register_buffer("delta_in_factor", torch.tensor(2.0 / (2.0**self.bits)))
         self.register_buffer("delta_out_factor", torch.tensor(2.0 / (2.0**self.bits - 2)))
