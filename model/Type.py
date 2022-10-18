@@ -1,5 +1,4 @@
 # Generic Type imports
-from tkinter.ttk import tclobjs_to_py
 from typing import Optional, Tuple, Union
 
 # Torch imports

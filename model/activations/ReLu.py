@@ -37,7 +37,7 @@ class ReLU(Quant):
                 if len(self.size) != len(x.shape):
                     self.size = self.size + [ 1 for x in range(len(x.shape)-len(self.size)) ]
                     super(ReLU,self).__init__(self.bits,self.size,self.rounding_mode)
-                    print("mismatch in input and definition found, louding wont be possiblöe until fixed")
+                    print("mismatch in input and definition found, loading wont be possible until fixed")
 
                 sigma = torch.var(x, self.reducelist, unbiased=False, keepdim=True).add(1e-5).sqrt()
                 if self.take_new:

@@ -85,8 +85,6 @@ class Conv2d(nn.Conv2d):
         weight_quant_args=None,
         weight_quant_kargs={},
         out_quant=None,
-        out_quant_bits=8,
-        out_quant_channel_wise=False,
         out_quant_args=None,
         out_quant_kargs={},
     ) -> None:
@@ -125,21 +123,19 @@ class Conv2d(nn.Conv2d):
         # only used if factor_fun in forward is None
         if out_quant_args == None:
             out_quant_args = (
-                out_quant_bits,
-                (-1,) if not out_quant_channel_wise else (1, out_channels, 1, 1),
-                0.1,
-                "floor",
+                8,
+                (1, out_channels, 1, 1)
             )
 
         if out_quant == None:
             self.out_quant = LinQuantExpScale(*out_quant_args, **out_quant_kargs)
         else:
-            self.out_quant = out_quant
+            self.out_quant = out_quant(*out_quant_args, **out_quant_kargs)
 
         self.register_buffer("quant_weight", torch.zeros_like(self.weight))
-        self.register_buffer("n", torch.zeros(((1, out_channels, 1, 1) if out_quant_channel_wise else 1)))
+        self.register_buffer("n", torch.zeros(((1, out_channels, 1, 1) )))
         if bias:
-            self.register_buffer("t", torch.zeros(((1, out_channels, 1, 1) if out_quant_channel_wise else 1)))
+            self.register_buffer("t", torch.zeros(((1, out_channels, 1, 1) )))
         else:
             self.t = None
 

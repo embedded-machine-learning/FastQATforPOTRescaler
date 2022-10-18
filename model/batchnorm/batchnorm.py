@@ -63,8 +63,6 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         dtype=None,
         fixed_n: bool = False,
         out_quant=None,
-        out_quant_bits: int = 8,
-        out_quant_channel_wise: bool = False,
         out_quant_args=None,
         out_quant_kargs={},
     ):
@@ -90,16 +88,14 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
 
         if out_quant_args == None:
             out_quant_args = (
-                out_quant_bits,
-                (-1,) if not out_quant_channel_wise else (1, num_features, 1, 1),
-                0.1,
-                "floor",
+                8,
+                (1, num_features, 1, 1),
             )
 
         if out_quant == None:
             self.out_quant = LinQuantExpScale(*out_quant_args, **out_quant_kargs)
         else:
-            self.out_quant = out_quant
+            self.out_quant = out_quant(*out_quant_args, **out_quant_kargs)
 
     def get_weight_factor(self):
         """

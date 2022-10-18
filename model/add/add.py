@@ -52,7 +52,7 @@ class Add(nn.Module):
         if out_quant == None:
             self.out_quant = LinQuantExpScale(*out_quant_args, **out_quant_kargs)
         else:
-            self.out_quant = out_quant
+            self.out_quant = out_quant(*out_quant_args, **out_quant_kargs)
 
     def forward(self, a, b):
         if a[0].shape != b[0].shape:

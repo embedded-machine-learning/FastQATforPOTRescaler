@@ -63,80 +63,6 @@ class LeakReLU(torch.nn.LeakyReLU):
         return x, rexp
 
 
-class PACT(nn.Module):
-    """
-    PACT The implementation of the PACT activation function
-
-    This is the implementation of the PACT activation function from `https://openreview.net/forum?id=By5ugjyCb`
-
-    :param size: The shape for alpha, defaults to (1,)
-    :type size: tuple, optional
-    """
-
-    def __init__(self, size: tuple = (1,)) -> None:
-        LOG(
-            __LOG_LEVEL_DEBUG__,
-            f"PACT arguments passed:\n\
-            size:                           {size}\n\
-            ",
-        )
-        super(PACT, self).__init__()
-        self.size = size
-        LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: self.size", self.size)
-        self.register_parameter("alpha", torch.nn.parameter(torch.ones(size)))
-        LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
-
-    def forward(self, invals: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Tensor]:
-        val, rexp = invals
-        if self.training:
-            out = 0.5 * (val.abs() - (val - self.alpha).abs() + self.alpha)
-            return out, rexp
-        else:
-            return val.clamp(min=0,max = self.alpha), rexp
-
-class PACT_fused_2(Quant):
-    """
-    PACT The implementation of the PACT activation function
-
-    This is the implementation of the PACT activation function from `https://openreview.net/forum?id=By5ugjyCb`
-    The fused part implicates, that is used inside the bn prior to quantizing, ans will never be called in the quantized domain
-
-    :param size: The shape for alpha, defaults to (1,)
-    :type size: tuple, optional
-    """
-
-    def __init__(self, bits, size=(-1,), rounding_mode: str = "floor") -> None:
-        super(PACT_fused_2, self).__init__(bits, size, rounding_mode)
-        self.bits = bits
-        assert self.bits > 0
-        self.register_buffer("delta_in_factor", torch.tensor(1.0 / (2.0**self.bits - 1)))
-        self.register_buffer("delta_out_factor", torch.tensor(1.0 / (2.0**self.bits - 1)))
-
-        self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones(size)))
-        LOG(__LOG_LEVEL_HIGH_DETAIL__, "PACT.__init__: parameter alpha", self.alpha)
-        self.register_buffer("alpha_used", torch.zeros_like(self.alpha))
-
-        nn.init.constant_(self.min, 0)
-        nn.init.constant_(self.max, 2**bits - 1)
-
-    def forward(self, x: torch.Tensor, fake: bool = False):
-        if self.training:
-            with torch.no_grad():
-                # abs = get_abs(self, x)
-                # print(abs)
-                # self.abs = ((1 - self.mom1) * self.abs + self.mom1 * abs).detach()
-                self.alpha_used = self.alpha.clone()  # block 2 small and negative alpha
-                self.alpha_used = self.alpha_used.clamp(min=1e-3)  # block 2 small and negative alpha
-                abs = self.alpha_used.log2().ceil().exp2()
-                self.delta_in = abs.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
-                self.delta_out = abs.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
-
-                self.max = self.alpha.div(self.delta_in, rounding_mode=self.rounding_mode).clamp(self.min)
-
-            x = PACT_back_function.apply(x, self.alpha)
-        return super().forward(x, fake)
-
-
 class PACT_fused_F8NET_mod(Quant):
     """
     PACT The implementation of the PACT activation function forced to the quantization scheme of F8NET, it is *not* F8NETs implementation
@@ -192,15 +118,3 @@ class PACT_fused_F8NET_mod(Quant):
             x = PACT_back_function.apply(x, self.alpha)
         return super().forward(x, fake)
 
-class PACT_back_function(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, val: Tensor, alpha: Tensor) -> Tensor:
-        ctx.save_for_backward(val >= alpha, val > 0)
-        return val
-
-    @staticmethod
-    def backward(ctx, grad_outputs: Tensor) -> Tuple[Tensor, Tensor]:
-        alpha_cmp, zero_cmp = ctx.saved_tensors
-        val_gard = grad_outputs * zero_cmp * (~alpha_cmp)
-        alpha_grad = grad_outputs * alpha_cmp * zero_cmp
-        return val_gard, alpha_grad
