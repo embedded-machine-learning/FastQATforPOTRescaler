@@ -1,5 +1,6 @@
 # Generic Type imports
-from typing import Optional, Tuple, Union
+from types import NoneType
+from typing import Optional, Tuple, Union, Callable
 
 # Torch imports
 import torch
@@ -24,7 +25,7 @@ class Start(nn.Module):
     """
 
     @logger_init
-    def __init__(self, size=(1,), bits: int = 8) -> None:
+    def __init__(self, size=(1,), bits: int = 8, mode: Union[str, NoneType] = "auto", auto_runs:int = 2) -> None:
         """
         Please read Class help
         """
@@ -32,12 +33,33 @@ class Start(nn.Module):
         self.size = size
         self.register_buffer("run", (-bits) * torch.ones(size, dtype=torch.float))
         self.register_buffer("delta_in", torch.clone((1.0 / (2.0 ** (-self.run) - 1))).detach())
-        self.register_buffer("delta_out", torch.clone((1.0 / (2.0 ** (-self.run)))).detach())
+        self.register_buffer("delta_out", torch.clone((1.0 / (2.0 ** (-self.run) - 1))).detach())
         self.register_buffer("max", 2 ** (-self.run - 1) - 1)
         self.register_buffer("min", -(2 ** (-self.run - 1)))
 
+        self.mode = mode
+        self.auto_runs = auto_runs
+        self.last_run_train = True
+        self.register_buffer("in_max", torch.Tensor([-10000.0]))
+        self.register_buffer("in_min", torch.Tensor([10000.0]))
+
     @logger_forward
     def forward(self, x: Tensor) -> Data_wrapper:
+        with torch.no_grad():
+            if self.training:
+                if self.mode == "auto" and self.auto_runs>0:
+                    self.last_run_train=True
+                    self.in_min = torch.min(torch.min(x), self.in_min)
+                    self.in_max = torch.max(torch.max(x), self.in_max)
+                    rang = 2 * (torch.max(torch.abs(self.in_min), torch.abs(self.in_max)))
+                    self.delta_in = rang / (2.0 ** (-self.run) - 1)
+                    self.delta_out = rang / (2.0 ** (-self.run) - 1)
+            else:
+                if self.last_run_train:
+                    self.last_run_train=False
+                    self.auto_runs -= 1
+            
+
         return Data_wrapper(
             FakeQuant(
                 x.clone(),
@@ -48,7 +70,7 @@ class Start(nn.Module):
                 self.max,
                 "floor",
             ),
-            self.run,
+            torch.log2(self.delta_out),
         )
 
 

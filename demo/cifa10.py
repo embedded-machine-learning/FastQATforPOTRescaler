@@ -6,7 +6,7 @@ import torchvision.transforms as transforms
 
 transform = transforms.Compose(
     [transforms.ToTensor(),
-     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+     transforms.Normalize((0.5, 0.5, 0.5), (1, 1, 1))])
 
 batch_size = 80
 
@@ -35,7 +35,7 @@ from model.Conversion import Start,Stop
 from model.activations import ReLU,PACT
 from model.linear import Linear
 from model.wrapped import FlattenM,MaxPool2d,Dropout
-from model.blocks import ConvBnA
+from model.blocks import ConvBnA,ResidualBlock
 
 
 
@@ -47,15 +47,18 @@ class Net(nn.Module):
 
         self.seq = nn.Sequential(
             ConvBnA(3,32,3,1,1,activation=PACT),
-            ConvBnA(32,32,3,1,1,activation=PACT),
+            # ConvBnA(32,32,3,1,1,activation=PACT),
+            ResidualBlock(32,32),
             MaxPool2d(2,2),
             Dropout(0.2),
             ConvBnA(32,64,3,1,1,activation=PACT),
-            ConvBnA(64,64,3,1,1,activation=PACT),
+            # ConvBnA(64,64,3,1,1,activation=PACT),
+            ResidualBlock(64,64),
             MaxPool2d(2,2),
             Dropout(0.3),
             ConvBnA(64,128,3,1,1,activation=PACT),
-            ConvBnA(128,128,3,1,1,activation=PACT),
+            # ConvBnA(128,128,3,1,1,activation=PACT),
+            ResidualBlock(128,128),
             MaxPool2d(2,2),
             Dropout(0.4),
             FlattenM(1),
@@ -63,6 +66,24 @@ class Net(nn.Module):
             Dropout(0.5),
             Linear(128,10)
         )
+        # self.seq = nn.Sequential(
+        #     ConvBnA(3,32,3,1,1,activation=PACT),
+        #     ConvBnA(32,32,3,1,1,activation=PACT),
+        #     MaxPool2d(2,2),
+        #     Dropout(0.2),
+        #     ConvBnA(32,64,3,1,1,activation=PACT),
+        #     ConvBnA(64,64,3,1,1,activation=PACT),
+        #     MaxPool2d(2,2),
+        #     Dropout(0.3),
+        #     ConvBnA(64,128,3,1,1,activation=PACT),
+        #     ConvBnA(128,128,3,1,1,activation=PACT),
+        #     MaxPool2d(2,2),
+        #     Dropout(0.4),
+        #     FlattenM(1),
+        #     Linear(128*4*4,128,out_quant=PACT),
+        #     Dropout(0.5),
+        #     Linear(128,10)
+        # )
 
     def forward(self, x):
         x = self.start(x)
@@ -72,6 +93,7 @@ class Net(nn.Module):
 
 def eval(pr=True):
     global testloader,net,device
+    global best
     correct = 0
     total = 0
     # since we're not training, we don't need to calculate the gradients for our outputs
@@ -90,8 +112,10 @@ def eval(pr=True):
     net.train()
     if pr:
         print(f'Accuracy of the network on the 10000 test images: {100 * correct // total} %')
+    if best < 100 * correct / total:
+        best = 100 * correct / total
 
-    return 100 * correct / total
+    return 100 * correct / total, best
 
 # net = model.resnet.resnet18(num_classes=10)
 net = Net()
@@ -101,10 +125,14 @@ net = net.to(device)
 import torch.optim as optim
 
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9,weight_decay=1e-3)
 #optimizer = optim.Adam(net.parameters(),lr=0.001)
 
 augm = nn.Sequential(torchvision.transforms.RandomResizedCrop(32,scale=(0.8,1.2)),torchvision.transforms.RandomHorizontalFlip()).to(device)
+
+best = 0
+
+
 
 for epoch in range(100):  # loop over the dataset multiple times
 
@@ -126,8 +154,10 @@ for epoch in range(100):  # loop over the dataset multiple times
         # print statistics
         running_loss += loss.item()
         # if i == 0:    # print every 2000 mini-batches
-    print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 80:>2.3f} Test Acc:{eval(False):2.1f}%')
+    ev = eval(False)
+    print(f'[{epoch + 1:3d}, {i + 1:5d}] loss: {running_loss / 80:6.3f} Test Acc:{ev[0]:3.1f}% Best test Acc:{ev[1]:3.1f}%')
     running_loss = 0.0
+    torch.save(net.state_dict(),"./demo/cifa10/ckp.pt")
             
 
 print('Finished Training')

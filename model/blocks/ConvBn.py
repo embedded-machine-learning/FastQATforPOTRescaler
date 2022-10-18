@@ -14,7 +14,7 @@ from ..activations import ReLU
 
 
 
-class ConvBnA(nn.Module):
+class ConvBn(nn.Module):
     """
     ConvBnA A module with a Convolution Batch-Norm and activation
 
@@ -87,7 +87,7 @@ class ConvBnA(nn.Module):
         padding_mode: str = "zeros",
         weight_quant=None,
         weight_quant_bits=8,
-        weight_quant_channel_wise=False,
+        weight_quant_channel_wise=True,
         weight_quant_args=None,
         weight_quant_kargs={},
         # Batch-Norm
@@ -106,7 +106,7 @@ class ConvBnA(nn.Module):
         """
         Please see class documentation
         """
-        super(ConvBnA, self).__init__()
+        super(ConvBn, self).__init__()
         self.conv = Conv2d(
             in_channels=in_channels,
             out_channels=out_channels,

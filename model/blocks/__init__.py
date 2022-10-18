@@ -1,1 +1,3 @@
 from .ConvBnA import ConvBnA
+from .ConvBn import ConvBn
+from .ResidualBlock import ResidualBlock

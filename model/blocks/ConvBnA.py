@@ -87,7 +87,7 @@ class ConvBnA(nn.Module):
         padding_mode: str = "zeros",
         weight_quant=None,
         weight_quant_bits=8,
-        weight_quant_channel_wise=False,
+        weight_quant_channel_wise=True,
         weight_quant_args=None,
         weight_quant_kargs={},
         # Batch-Norm
