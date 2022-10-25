@@ -1,9 +1,9 @@
 from typing import Tuple
+from typing import Optional
 
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.nn.common_types import Tensor
-from typing import Optional
 
 from ..Quantizer import Quant
 from ..DataWrapper import DataWrapper

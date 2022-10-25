@@ -4,7 +4,7 @@ from typing import Tuple, Union
 
 # Torch imports
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.nn.common_types import Tensor
 
 # Self init

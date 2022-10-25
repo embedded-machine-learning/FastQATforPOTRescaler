@@ -1,5 +1,4 @@
 import inspect
-from operator import index
 import re
 import os
 

@@ -1,7 +1,7 @@
-import torch
-import torch.nn as nn
-from torch.nn.common_types import _size_2_t
 from typing import Union,Optional
+
+from torch import nn
+from torch.nn.common_types import _size_2_t
 
 
 from ..DataWrapper import DataWrapper
@@ -153,8 +153,8 @@ class ConvBnA(nn.Module):
     @logger_forward
     def forward(self, x: DataWrapper) -> DataWrapper:
 
-        fact = self.bn.get_weight_factor()
 
+        fact = self.bn.get_weight_factor()
         x = self.conv(x, fact)
         x = self.bn(x,self.activation)
 

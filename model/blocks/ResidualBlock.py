@@ -1,7 +1,6 @@
-import torch
-import torch.nn as nn
-from torch.nn.common_types import _size_2_t
-from typing import Union,Optional, Callable
+from typing import Optional, Callable
+
+from torch import nn
 
 from ..Quantizer import Quant
 from ..DataWrapper import DataWrapper
@@ -35,8 +34,28 @@ def add(in_planes:int,kargs={})-> nn.Module:
     return Add((1,in_planes,1,1),**kargs)
 
 class ResidualBlock(nn.Module):
-    expansion: int = 1
+    """
+    ResidualBlock The Residual Block from Resnet
 
+    :param inplanes: Number of input planes
+    :type inplanes: int
+    :param planes: Number of output planes
+    :type planes: int
+    :param stride: The Stride, defaults to 1
+    :type stride: int, optional
+    :param downsample: The down-sample Module, defaults to None
+    :type downsample: Optional[nn.Module], optional
+    :param groups: The size of the Groups, defaults to 1
+    :type groups: int, optional
+    :param base_width: Jeah no Idea go look at resnet , defaults to 64
+    :type base_width: int, optional
+    :param dilation: The dilation, defaults to 1
+    :type dilation: int, optional
+    :param norm_layer: The Normlaer used, if None the BatchNorm2d is used (you know the QAT one), defaults to None
+    :type norm_layer: Optional[Callable[..., nn.Module]], optional
+    """
+    expansion: int = 1
+    @logger_init
     def __init__(
         self,
         inplanes: int,
@@ -48,7 +67,7 @@ class ResidualBlock(nn.Module):
         dilation: int = 1,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
     ) -> None:
-        super().__init__()
+        super(ResidualBlock,self).__init__()
         if norm_layer is None:
             norm_layer = BatchNorm2d
         if groups != 1 or base_width != 64:
@@ -67,9 +86,9 @@ class ResidualBlock(nn.Module):
         self.add = add(planes)
         self.act3 = act(planes,{'use_enforced_quant_level':True})
 
+    @logger_forward
     def forward(self, x: DataWrapper) -> DataWrapper:
         x.set_quant()
-        tmp = x['value']
 
         fact1 = self.bn1.get_weight_factor()
         out = self.conv1(x, fact1)

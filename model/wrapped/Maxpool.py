@@ -1,27 +1,44 @@
+from typing import Optional
+
 import torch
-import torch.nn as nn
+from torch import nn
 import torch.nn.functional as F
 from torch.nn.common_types import _size_any_t, _size_any_opt_t
 
-from typing import Optional
 
 from ..logger import logger_forward, logger_init
 from ..DataWrapper import DataWrapper
 
 
 class MaxPool2d(nn.MaxPool2d):
+    """
+    MaxPool2d Wrappes torches nn.MaxPool2d
+
+    _extended_summary_
+
+    :param kernel_size: The shape of kernel
+    :type kernel_size: _size_any_t
+    :param stride: The Stride, defaults to None
+    :type stride: Optional[_size_any_t], optional
+    :param padding: The padding size, defaults to 0
+    :type padding: _size_any_t, optional
+    :param dilation: The dilatation, defaults to 1
+    :type dilation: _size_any_t, optional
+    :param ceil_mode: Should it ceil, defaults to False
+    :type ceil_mode: bool, optional
+    """
+    @logger_init
     def __init__(
         self,
         kernel_size: _size_any_t,
         stride: Optional[_size_any_t] = None,
         padding: _size_any_t = 0,
         dilation: _size_any_t = 1,
-        return_indices: bool = False,
         ceil_mode: bool = False,
     ) -> None:
-        super(MaxPool2d, self).__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)
-        assert return_indices == False
+        super(MaxPool2d, self).__init__(kernel_size, stride, padding, dilation, False, ceil_mode)
 
+    @logger_forward
     def forward(self, input: DataWrapper):
         val, rexp = input.get()
         return input.set(
@@ -34,6 +51,16 @@ class MaxPool2d(nn.MaxPool2d):
 
 
 class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d):
+    """
+    AdaptiveAvgPool2d Wrappes nn.AdaptiveAvgPool2d
+
+    **IMPORTANT** it also quantizes it to the current quantization level,
+        if implement in HW make sure that this is implemented correctly
+
+    :param output_size: The desired output shape
+    :type output_size: _size_any_opt_t
+    """
+    @logger_init
     def __init__(self, output_size: _size_any_opt_t) -> None:
         super(AdaptiveAvgPool2d,self).__init__(output_size)
 

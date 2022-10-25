@@ -1,16 +1,13 @@
 # Generic Type imports
-from typing import Optional,Tuple
+from typing import Optional, Tuple
 
 # Torch imports
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.nn.common_types import Tensor
 
-from model.DataWrapper import DataWrapper
-
-
-from .logger import logger_init,logger_forward
-
+from .DataWrapper import DataWrapper
+from .logger import logger_init, logger_forward
 
 
 def FakeQuant(
@@ -52,8 +49,6 @@ def FakeQuant(
     return x
 
 
-
-
 class Quant(nn.Module):
     """
     Quant Quantization base module
@@ -69,7 +64,9 @@ class Quant(nn.Module):
     """
 
     @logger_init
-    def __init__(self, bits:int,size:Tuple[int]=(-1,), rounding_mode: str = "floor", use_enforced_quant_level:bool = False ) -> None:
+    def __init__(
+        self, bits: int, size: Tuple[int] = (-1,), rounding_mode: str = "floor", use_enforced_quant_level: bool = False
+    ) -> None:
         super(Quant, self).__init__()
         self.simple = False
         self.bits = bits
@@ -87,7 +84,7 @@ class Quant(nn.Module):
         self.permute_list = []
         self.reduce_list = []
         self.number_of_dims = 0
-        for i,val in enumerate(size):
+        for i, val in enumerate(size):
             # print(size[i])
             if val != 1:
                 self.permute_list.insert(0, i)
@@ -99,11 +96,11 @@ class Quant(nn.Module):
         self.permute_list = tuple(self.permute_list)
         self.rounding_mode = rounding_mode
 
-        self.register_buffer("max", torch.ones(self.size)*(2 ** (self.bits - 1) - 1))
-        self.register_buffer("min", torch.ones(self.size)*(-(2 ** (self.bits - 1))))
-    
+        self.register_buffer("max", torch.ones(self.size) * (2 ** (self.bits - 1) - 1))
+        self.register_buffer("min", torch.ones(self.size) * (-(2 ** (self.bits - 1))))
+
     @logger_forward
-    def copy(self,other:'Quant'):
+    def copy(self, other: "Quant"):
         """
         copy copies the internal content from other to self
 
@@ -117,7 +114,7 @@ class Quant(nn.Module):
         self.rounding_mode = other.rounding_mode
 
     @logger_forward
-    def use_quant(self,metadata:DataWrapper):
+    def use_quant(self, metadata: DataWrapper):
         """
         use_quant Uses the factor quantization function of the meta data
 
@@ -147,9 +144,8 @@ class Quant(nn.Module):
             abs_val = x_reorderd.abs().max(dim=(self.number_of_dims), keepdim=True).values.view(self.size)
         return abs_val
 
-
     @logger_forward
-    def forward(self, x:Tensor, fake:bool = False)-> Tensor:
+    def forward(self, x: Tensor, fake: bool = False) -> Tensor:
         """
         forward Fake quantizes the value
 
@@ -190,9 +186,17 @@ class LinQuantExpScale(Quant):
     :param mom1: The momentum used to update the internal running mean, defaults to 0.1
     :type mom1: float, optional
     """
+
     @logger_init
-    def __init__(self, bits: int, size: Tuple[int] = (-1, ), rounding_mode: str = "floor", use_enforced_quant_level: bool = False, mom1:float=0.1) -> None:
-        super(LinQuantExpScale,self).__init__(bits, size, rounding_mode, use_enforced_quant_level)
+    def __init__(
+        self,
+        bits: int,
+        size: Tuple[int] = (-1,),
+        rounding_mode: str = "floor",
+        use_enforced_quant_level: bool = False,
+        mom1: float = 0.1,
+    ) -> None:
+        super(LinQuantExpScale, self).__init__(bits, size, rounding_mode, use_enforced_quant_level)
         if size == (-1,):
             self.register_buffer("abs", torch.ones(1))
         else:
@@ -204,7 +208,7 @@ class LinQuantExpScale(Quant):
         self.register_buffer("delta_out_factor", torch.tensor(2.0 / (2.0**self.bits - 1)))
 
     @logger_forward
-    def forward(self, x: torch.Tensor, fake:bool = False, metadata: Optional[DataWrapper] = None ):
+    def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None):
         if self.training:
             with torch.no_grad():
                 abs_value = self.get_abs(x)
@@ -219,4 +223,4 @@ class LinQuantExpScale(Quant):
                 if self.use_enforced_quant_level and metadata is None:
                     raise ValueError("Quantization function desired but metadata not passed")
 
-        return super(LinQuantExpScale, self).forward(x,fake)
+        return super(LinQuantExpScale, self).forward(x, fake)

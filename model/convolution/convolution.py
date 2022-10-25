@@ -1,6 +1,6 @@
 # Generic Type imports
 from types import FunctionType
-from typing import Union, Tuple
+from typing import Union
 
 # Torch imports
 import torch
@@ -8,8 +8,8 @@ import torch.nn as nn
 from torch.nn.common_types import _size_2_t, Tensor
 
 # module imports
-from ..Quantizer import Quant, get_abs, FakeQuant, LinQuantExpScale
 from ..logger import logger_init,logger_forward
+from ..Quantizer import LinQuantExpScale,FakeQuant
 from ..DataWrapper import DataWrapper
 
 # current module imports

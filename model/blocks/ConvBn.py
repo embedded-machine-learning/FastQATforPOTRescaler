@@ -1,7 +1,7 @@
-import torch.nn as nn
-from torch.nn.common_types import _size_2_t
 from typing import Union
 
+from torch import nn
+from torch.nn.common_types import _size_2_t
 
 from ..DataWrapper import DataWrapper
 from ..logger import logger_forward,logger_init
@@ -13,7 +13,7 @@ from ..batchnorm import BatchNorm2d
 
 class ConvBn(nn.Module):
     """
-    ConvBnA A module with a Convolution Batch-Norm and activation
+    ConvBnA A module with a Convolution and Batch-Norm
 
     Per default the activation function is a ReLu
 
@@ -143,7 +143,6 @@ class ConvBn(nn.Module):
     def forward(self, x: DataWrapper) -> DataWrapper:
 
         fact = self.bn.get_weight_factor()
-
         x = self.conv(x, fact)
         x = self.bn(x)
 

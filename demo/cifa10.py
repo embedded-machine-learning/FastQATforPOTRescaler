@@ -46,31 +46,31 @@ from model.blocks import ConvBnA,ResidualBlock
 class Net(nn.Module):
     def __init__(self):
         super().__init__()
-        self.start = Start((1,3,1,1),8)
-        self.stop = Stop((1,10))
+        self.start = Start(bits=8,size=(1,3,1,1),mode="auto",auto_runs=2)
+        self.stop = Stop(size=(1,10))
 
         self.seq = nn.Sequential(
             ConvBnA(in_channels=3,out_channels=32,kernel_size=3,stride=1,padding=1,activation=PACT),
             # ConvBnA(32,32,3,1,1,activation=PACT),
-            ResidualBlock(32,32),
-            ResidualBlock(32,32),
-            ResidualBlock(32,32),
-            MaxPool2d(2,2),
-            Dropout(0.2),
-            ConvBnA(32,64,3,1,1,activation=PACT),
+            ResidualBlock(inplanes=32,planes=32),
+            ResidualBlock(inplanes=32,planes=32),
+            ResidualBlock(inplanes=32,planes=32),
+            MaxPool2d(kernel_size=2,stride=2),
+            Dropout(p=0.2),
+            ConvBnA(in_channels=32,out_channels=64,kernel_size=3,stride=1,padding=1,activation=PACT),
             # ConvBnA(64,64,3,1,1,activation=PACT),
-            ResidualBlock(64,64),
-            MaxPool2d(2,2),
-            Dropout(0.3),
-            ConvBnA(64,128,3,1,1,activation=PACT),
+            ResidualBlock(inplanes=64,planes=64),
+            MaxPool2d(kernel_size=2,stride=2),
+            Dropout(p=0.3),
+            ConvBnA(in_channels=64,out_channels=128,kernel_size=3,stride=1,padding=1,activation=PACT),
             # ConvBnA(128,128,3,1,1,activation=PACT),
-            ResidualBlock(128,128),
-            MaxPool2d(2,2),
-            Dropout(0.4),
-            FlattenM(1),
-            Linear(128*4*4,128,out_quant=PACT),
-            Dropout(0.5),
-            Linear(128,10)
+            ResidualBlock(inplanes=128,planes=128),
+            MaxPool2d(kernel_size=2,stride=2),
+            Dropout(p=0.4),
+            FlattenM(dim=1),
+            Linear(in_features=128*4*4,out_features=128,out_quant=PACT),
+            Dropout(p=0.5),
+            Linear(in_features=128,out_features=10)
         )
         # self.seq = nn.Sequential(
         #     ConvBnA(3,32,3,1,1,activation=PACT),
@@ -172,7 +172,7 @@ for epoch in range(epochs):  # loop over the dataset multiple times
 print('Finished Training')
 
 
-import os
+
 if not os.path.exists("./demo/cifa10/"):
     os.mkdir("./demo/cifa10/")
 

@@ -1,8 +1,8 @@
-import torch
-import torch.nn as nn
-from torch.nn.common_types import Tensor
-
 from typing import Optional, Tuple
+
+import torch
+from torch import nn
+from torch.nn.common_types import Tensor
 
 from ..DataWrapper import DataWrapper
 

@@ -1,6 +1,7 @@
 from typing import Union
+
 import torch
-import torch.nn as nn
+from torch import nn
 import numpy as np
 
 from ..Quantizer import LinQuantExpScale
@@ -131,12 +132,12 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             if __HIGH_PRES__:
                 xorig = x.data.clone().detach()
 
-            x = super(BatchNorm2d,self).forward(x)
+            x = super(BatchNorm2d, self).forward(x)
 
             if not __HIGH_PRES__:
-                x = quant(x, False,input)
+                x = quant(x, False, input)
             else:
-                x = quant(x, True,input)
+                x = quant(x, True, input)
                 with torch.no_grad():
                     if __HIGH_PRES_USE_RUNNING__:
                         mu = self.running_mean.clone()

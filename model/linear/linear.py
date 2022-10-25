@@ -1,9 +1,9 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-from torch.nn.common_types import Tensor
 from types import FunctionType
+
+import torch
+from torch import nn
+import torch.nn.functional as F
+from torch.nn.common_types import Tensor
 
 from ..logger import logger_forward,logger_init
 
@@ -155,7 +155,7 @@ class Linear(nn.Linear):
         :return: Returns the computed values and the exponents
         :rtype: Tuple[torch.Tensor, torch.Tensor]
         """
-        input, rexp = invals.get()
+        x, rexp = invals.get()
 
         rexp_mean = (torch.mean(rexp)).squeeze()
         rexp_diff = rexp.squeeze() - rexp_mean.unsqueeze(-1)
@@ -207,9 +207,9 @@ class Linear(nn.Linear):
             ).view(1, -1)
 
         if self.training:
-            out = F.linear(input, weight, bias)
+            out = F.linear(x, weight, bias)
         else:
-            out = F.linear(input, weight, None)
+            out = F.linear(x, weight, None)
 
         if factor_fun == None:
             if self.training:

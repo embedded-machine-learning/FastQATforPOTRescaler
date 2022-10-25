@@ -1,10 +1,10 @@
-import torch
-from torch.nn.common_types import Tensor
-
 from types import FunctionType
 from typing import Tuple
 
-from ..Quantizer import Quant,FakeQuant,get_abs
+import torch
+from torch.nn.common_types import Tensor
+
+from ..Quantizer import Quant,FakeQuant
 from ..logger import logger_forward,logger_init
 
 
@@ -68,9 +68,9 @@ class LinQuantWeight(Quant):
         :rtype: tuple[Tensor,Tensor]
         """
         with torch.no_grad():
-            abs = get_abs(self, x * (rexp_diff.view(*self.rexp_view)))
+            abs_value = self.get_abs(x * (rexp_diff.view(*self.rexp_view)))
 
-            self.abs = abs.detach()
+            self.abs = abs_value.detach()
             self.delta_in = self.abs.mul(self.delta_in_factor).detach()
             self.delta_out = self.abs.mul(self.delta_out_factor).detach()
 

@@ -1,15 +1,15 @@
+from typing import Union
+
 import torch
 import torch.nn as nn
 
-from typing import Union
+from ..DataWrapper import DataWrapper
 
-from model.DataWrapper import DataWrapper
+from ..logger import logger_forward, logger_init
+from ..Quantizer import LinQuantExpScale
 
+from .. import __HIGH_PRES__
 
-from ..logger import logger_forward,logger_init
-from ..Quantizer import LinQuantExpScale 
-
-from .. import __DEBUG__,__HIGH_PRES__
 
 class Add(nn.Module):
     """
@@ -26,6 +26,7 @@ class Add(nn.Module):
     :param out_quant_kargs: Passes named arguments to the initializer of the out quantization class, defaults to {}
     :type out_quant_kargs: dict, optional
     """
+
     @logger_init
     def __init__(
         self,
@@ -43,7 +44,7 @@ class Add(nn.Module):
             out_quant_args = (
                 8,
                 size,
-                )
+            )
 
         if out_quant == None:
             self.out_quant = LinQuantExpScale(*out_quant_args, **out_quant_kargs)
@@ -51,7 +52,7 @@ class Add(nn.Module):
             self.out_quant = out_quant(*out_quant_args, **out_quant_kargs)
 
     @logger_forward
-    def forward(self, in_a:DataWrapper, in_b:DataWrapper, activation: Union[None, nn.Module] = None) -> DataWrapper:
+    def forward(self, in_a: DataWrapper, in_b: DataWrapper, activation: Union[None, nn.Module] = None) -> DataWrapper:
         a = in_a.get()
         b = in_b.get()
 
