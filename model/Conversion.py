@@ -1,17 +1,16 @@
 # Generic Type imports
 from types import NoneType
-from typing import Optional, Tuple, Union, Callable
+from typing import Tuple, Union
 
 # Torch imports
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.nn.common_types import Tensor
 
 # Self init
-from . import logger_init, logger_forward
+from .logger import logger_init, logger_forward
 from .Quantizer import FakeQuant
-from .Type import Data_wrapper
+from .DataWrapper import DataWrapper
 
 
 class Start(nn.Module):
@@ -20,12 +19,20 @@ class Start(nn.Module):
 
     **IMPORTANT** A value domain of [-0.5,0.5] is assumed, fix this of different or force it to that domain
 
-    :param bits: Quantization bit width
-    :type bits: int
+    :param bits: The number of desired bits, defaults to 8
+    :type bits: int, optional
+    :param size: The shape of the quantization, defaults to (1,)
+    :type size: Tuple[int], optional
+    :param mode: Defines if the quantization range should be extracted during runtime or set to [-.5,.5], defaults to "auto"
+    :type mode: Union[str, NoneType], optional
+    :param auto_runs: Number of epochs to fixate the auto range, defaults to 2
+    :type auto_runs: int, optional
     """
 
     @logger_init
-    def __init__(self, size=(1,), bits: int = 8, mode: Union[str, NoneType] = "auto", auto_runs:int = 2) -> None:
+    def __init__(
+        self, bits: int = 8, size: Tuple[int] = (1,), mode: Union[str, NoneType] = "auto", auto_runs: int = 2
+    ) -> None:
         """
         Please read Class help
         """
@@ -44,11 +51,11 @@ class Start(nn.Module):
         self.register_buffer("in_min", torch.Tensor([10000.0]))
 
     @logger_forward
-    def forward(self, x: Tensor) -> Data_wrapper:
+    def forward(self, x: Tensor) -> DataWrapper:
         with torch.no_grad():
             if self.training:
-                if self.mode == "auto" and self.auto_runs>0:
-                    self.last_run_train=True
+                if self.mode == "auto" and self.auto_runs > 0:
+                    self.last_run_train = True
                     self.in_min = torch.min(torch.min(x), self.in_min)
                     self.in_max = torch.max(torch.max(x), self.in_max)
                     rang = 2 * (torch.max(torch.abs(self.in_min), torch.abs(self.in_max)))
@@ -56,11 +63,10 @@ class Start(nn.Module):
                     self.delta_out = rang / (2.0 ** (-self.run) - 1)
             else:
                 if self.last_run_train:
-                    self.last_run_train=False
+                    self.last_run_train = False
                     self.auto_runs -= 1
-            
 
-        return Data_wrapper(
+        return DataWrapper(
             FakeQuant(
                 x.clone(),
                 self.delta_in,
@@ -77,10 +83,13 @@ class Start(nn.Module):
 class Stop(nn.Module):
     """
     Stop Return a Tensor pair from the fake-quantized/quantized domain
+
+    :param size: The shape of the output, defaults to (1,)
+    :type size: Tuple[int], optional
     """
 
     @logger_init
-    def __init__(self, size=(1,)) -> None:
+    def __init__(self, size: Tuple[int] = (1,)) -> None:
         """
         Please read Class help
         """
@@ -90,7 +99,7 @@ class Stop(nn.Module):
         self.register_buffer("for_dtype", torch.zeros(1))  # Only required to know the current datatype
 
     @logger_forward
-    def forward(self, invals: Data_wrapper) -> Tensor:
+    def forward(self, invals: DataWrapper) -> Tensor:
         x, rexp = invals.get()
         self.exp = rexp.detach().clone()
         with torch.no_grad():

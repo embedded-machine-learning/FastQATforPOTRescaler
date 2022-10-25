@@ -7,7 +7,7 @@ from ..Quantizer import LinQuantExpScale
 
 from ..logger import logger_init, logger_forward
 
-from ..Type import Data_wrapper
+from ..DataWrapper import DataWrapper
 
 from .. import (
     __DEBUG__,
@@ -115,7 +115,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         return ret_fun
 
     @logger_forward
-    def forward(self, input: Data_wrapper, activation: Union[None, nn.Module] = None) -> Data_wrapper:
+    def forward(self, input: DataWrapper, activation: Union[None, nn.Module] = None) -> DataWrapper:
         x, rexp = input.get()
 
         if activation != None:
@@ -134,9 +134,9 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             x = super(BatchNorm2d,self).forward(x)
 
             if not __HIGH_PRES__:
-                x = quant(x, False)
+                x = quant(x, False,input)
             else:
-                x = quant(x, True)
+                x = quant(x, True,input)
                 with torch.no_grad():
                     if __HIGH_PRES_USE_RUNNING__:
                         mu = self.running_mean.clone()

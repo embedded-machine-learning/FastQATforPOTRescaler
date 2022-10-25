@@ -4,7 +4,7 @@ from torch.nn.common_types import _size_2_t
 from typing import Union,Optional, Callable
 
 from ..Quantizer import Quant
-from ..Type import Data_wrapper
+from ..DataWrapper import DataWrapper
 from ..logger import logger_forward,logger_init
 from ..batchnorm import BatchNorm2d
 from ..convolution import Conv2d
@@ -28,11 +28,11 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
         weight_quant=None,
     )
 
-def act(in_planes:int) -> Quant:
-    return PACT(8,(1,in_planes,1,1))
+def act(in_planes:int,kargs={}) -> Quant:
+    return PACT(8,(1,in_planes,1,1),**kargs)
 
-def add(in_planes:int)-> nn.Module:
-    return Add((1,in_planes,1,1),PACT)
+def add(in_planes:int,kargs={})-> nn.Module:
+    return Add((1,in_planes,1,1),**kargs)
 
 class ResidualBlock(nn.Module):
     expansion: int = 1
@@ -61,12 +61,15 @@ class ResidualBlock(nn.Module):
         self.act1 = act(planes)
         self.conv2 = conv3x3(planes, planes)
         self.bn2 = norm_layer(planes)
-        self.act2 = act(planes)
+        self.act2 = act(planes,{'use_enforced_quant_level':True})
         self.downsample = downsample
         self.stride = stride
         self.add = add(planes)
+        self.act3 = act(planes,{'use_enforced_quant_level':True})
 
-    def forward(self, x: Data_wrapper) -> Data_wrapper:
+    def forward(self, x: DataWrapper) -> DataWrapper:
+        x.set_quant()
+        tmp = x['value']
 
         fact1 = self.bn1.get_weight_factor()
         out = self.conv1(x, fact1)
@@ -79,6 +82,6 @@ class ResidualBlock(nn.Module):
         if self.downsample is not None:
             x = self.downsample(x)
 
-        out = self.add(out, x)
+        out = self.add(out, x, self.act3)
 
         return out

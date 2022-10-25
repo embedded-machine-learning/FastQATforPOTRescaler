@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
 
-from model.Type import Data_wrapper
+from typing import Union
+
+from model.DataWrapper import DataWrapper
 
 
 from ..logger import logger_forward,logger_init
@@ -49,30 +51,37 @@ class Add(nn.Module):
             self.out_quant = out_quant(*out_quant_args, **out_quant_kargs)
 
     @logger_forward
-    def forward(self, in_a:Data_wrapper, in_b:Data_wrapper) -> Data_wrapper:
+    def forward(self, in_a:DataWrapper, in_b:DataWrapper, activation: Union[None, nn.Module] = None) -> DataWrapper:
         a = in_a.get()
         b = in_b.get()
+
+        if activation != None:
+            self.out_quant.copy(activation)
+            quant = activation
+        else:
+            quant = self.out_quant
+
         if a[0].shape != b[0].shape:
             raise torch.ErrorReport("testW")
         if self.training:
             out = a[0] + b[0]
-            out = self.out_quant(out, __HIGH_PRES__)
-            rexp = self.out_quant.delta_out.log2()
+            out = quant(out, __HIGH_PRES__, in_a)
+            rexp = quant.delta_out.log2()
             if __HIGH_PRES__:
                 with torch.no_grad():
                     va = a[0].div(rexp.exp2()).floor()
                     vb = b[0].div(rexp.exp2()).floor()
                     out2 = va + vb
-                    out2 = out2.clamp(self.out_quant.min, self.out_quant.max)
+                    out2 = out2.clamp(quant.min, quant.max)
                     out2 = out2.mul(rexp.exp2())
                 out.data = out2
         else:
-            rexp = self.out_quant.delta_out.log2()
+            rexp = quant.delta_out.log2()
             self.a_shift = (rexp - a[1]).detach()
             self.b_shift = (rexp - b[1]).detach()
             va = a[0].div(self.a_shift.exp2(), rounding_mode="floor")
             vb = b[0].div(self.b_shift.exp2(), rounding_mode="floor")
             out = va + vb
-            out = out.clamp(self.out_quant.min, self.out_quant.max)
+            out = out.clamp(quant.min, quant.max)
 
         return in_a.set(out, rexp)

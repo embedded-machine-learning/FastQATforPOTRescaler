@@ -2,9 +2,11 @@ import torch
 import torch.nn as nn
 from torch.nn.common_types import Tensor
 
-from typing import Tuple
+from typing import Optional, Tuple
 
-from ..logger import logger_init,logger_forward
+from ..DataWrapper import DataWrapper
+
+from ..logger import logger_init, logger_forward
 from ..Quantizer import Quant
 
 
@@ -13,13 +15,14 @@ class PACT(Quant):
     PACT The implementation of the PACT activation function
 
     This is the implementation of the PACT activation function from `https://openreview.net/forum?id=By5ugjyCb`
-    
+
     :param size: The shape for alpha, defaults to (1,)
     :type size: tuple, optional
     """
 
-    def __init__(self, bits, size=(-1,), rounding_mode: str = "floor") -> None:
-        super(PACT, self).__init__(bits, size, rounding_mode)
+    @logger_init
+    def __init__(self, bits, size=(-1,), rounding_mode: str = "floor", use_enforced_quant_level: bool = False) -> None:
+        super(PACT, self).__init__(bits, size, rounding_mode, use_enforced_quant_level)
         self.bits = bits
         assert self.bits > 0
         self.register_buffer("delta_in_factor", torch.tensor(1.0 / (2.0**self.bits - 1)))
@@ -31,7 +34,10 @@ class PACT(Quant):
         nn.init.constant_(self.min, 0)
         nn.init.constant_(self.max, 2**bits - 1)
 
-    def forward(self, x: torch.Tensor, fake: bool = False):
+        self.register_buffer("max_helper", (2**bits - 1) * torch.ones_like(self.max))
+
+    @logger_forward
+    def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None):
         if self.training:
             with torch.no_grad():
 
@@ -40,11 +46,16 @@ class PACT(Quant):
                 # abs = self.alpha_used.log2().ceil().exp2()
                 self.delta_in = self.alpha_used.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
                 self.delta_out = self.alpha_used.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
+                if self.use_enforced_quant_level and metadata is not None:
+                    self.use_quant(metadata)
+                if self.use_enforced_quant_level and metadata is None:
+                    raise ValueError("Quantization function desired but metadata not passed")
+                
 
-                self.max = self.alpha.div(self.delta_in, rounding_mode=self.rounding_mode).clamp(self.min)
+                self.max = self.alpha.div(self.delta_in, rounding_mode=self.rounding_mode).clamp(self.min,self.max_helper)
 
             x = PACT_back_function.apply(x, self.alpha)
-        return super().forward(x, fake)
+        return super(PACT,self).forward(x, fake)
 
 
 class PACT_back_function(torch.autograd.Function):

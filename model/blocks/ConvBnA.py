@@ -4,7 +4,7 @@ from torch.nn.common_types import _size_2_t
 from typing import Union,Optional
 
 
-from ..Type import Data_wrapper
+from ..DataWrapper import DataWrapper
 from ..logger import logger_forward,logger_init
 
 from ..Quantizer import Quant
@@ -151,7 +151,7 @@ class ConvBnA(nn.Module):
             self.activation = activation(*activation_args, **activation_kargs)
 
     @logger_forward
-    def forward(self, x: Data_wrapper) -> Data_wrapper:
+    def forward(self, x: DataWrapper) -> DataWrapper:
 
         fact = self.bn.get_weight_factor()
 

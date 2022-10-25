@@ -23,7 +23,7 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
         with torch.no_grad():
             sigma = (
-                torch.var(x * (rexp_diff.view(*self.rexp_view)), self.reducelist, unbiased=False, keepdim=True)
+                torch.var(x * (rexp_diff.view(*self.rexp_view)), self.reduce_list, unbiased=False, keepdim=True)
                 .add_(1e-5)
                 .sqrt_()
             )

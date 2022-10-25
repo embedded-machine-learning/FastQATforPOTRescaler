@@ -1,16 +1,13 @@
-import torch
 import torch.nn as nn
 from torch.nn.common_types import _size_2_t
-from typing import Union,Optional
+from typing import Union
 
 
-from ..Type import Data_wrapper
+from ..DataWrapper import DataWrapper
 from ..logger import logger_forward,logger_init
 
-from ..Quantizer import Quant
 from ..convolution import Conv2d
 from ..batchnorm import BatchNorm2d
-from ..activations import ReLU
 
 
 
@@ -143,7 +140,7 @@ class ConvBn(nn.Module):
         )
 
     @logger_forward
-    def forward(self, x: Data_wrapper) -> Data_wrapper:
+    def forward(self, x: DataWrapper) -> DataWrapper:
 
         fact = self.bn.get_weight_factor()
 

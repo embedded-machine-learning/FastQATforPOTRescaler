@@ -1,3 +1,5 @@
+from sched import scheduler
+from tabnanny import verbose
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -9,6 +11,8 @@ transform = transforms.Compose(
      transforms.Normalize((0.5, 0.5, 0.5), (1, 1, 1))])
 
 batch_size = 80
+epochs = 100
+
 
 trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
                                         download=True, transform=transform)
@@ -46,8 +50,10 @@ class Net(nn.Module):
         self.stop = Stop((1,10))
 
         self.seq = nn.Sequential(
-            ConvBnA(3,32,3,1,1,activation=PACT),
+            ConvBnA(in_channels=3,out_channels=32,kernel_size=3,stride=1,padding=1,activation=PACT),
             # ConvBnA(32,32,3,1,1,activation=PACT),
+            ResidualBlock(32,32),
+            ResidualBlock(32,32),
             ResidualBlock(32,32),
             MaxPool2d(2,2),
             Dropout(0.2),
@@ -125,7 +131,8 @@ net = net.to(device)
 import torch.optim as optim
 
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9,weight_decay=1e-3)
+optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9,weight_decay=1e-3)
+sched= optim.lr_scheduler.CosineAnnealingLR(optimizer,epochs,1e-5,verbose=True)
 #optimizer = optim.Adam(net.parameters(),lr=0.001)
 
 augm = nn.Sequential(torchvision.transforms.RandomResizedCrop(32,scale=(0.8,1.2)),torchvision.transforms.RandomHorizontalFlip()).to(device)
@@ -134,7 +141,7 @@ best = 0
 
 
 
-for epoch in range(100):  # loop over the dataset multiple times
+for epoch in range(epochs):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
@@ -151,6 +158,7 @@ for epoch in range(100):  # loop over the dataset multiple times
         loss.backward()
         optimizer.step()
 
+
         # print statistics
         running_loss += loss.item()
         # if i == 0:    # print every 2000 mini-batches
@@ -158,6 +166,7 @@ for epoch in range(100):  # loop over the dataset multiple times
     print(f'[{epoch + 1:3d}, {i + 1:5d}] loss: {running_loss / 80:6.3f} Test Acc:{ev[0]:3.1f}% Best test Acc:{ev[1]:3.1f}%')
     running_loss = 0.0
     torch.save(net.state_dict(),"./demo/cifa10/ckp.pt")
+    sched.step()
             
 
 print('Finished Training')

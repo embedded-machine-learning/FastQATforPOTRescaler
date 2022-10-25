@@ -8,7 +8,7 @@ from types import FunctionType
 from ..logger import logger_forward,logger_init
 
 from ..Quantizer import LinQuantExpScale,FakeQuant
-from ..Type import Data_wrapper
+from ..DataWrapper import DataWrapper
 from .. import __DEBUG__
 
 from .weight_quantization import LinQuantWeight
@@ -68,7 +68,7 @@ class Linear(nn.Linear):
         out_quant_kargs={},
     ) -> None:
 
-        super().__init__(in_features, out_features, bias, device, dtype)
+        super(Linear,self).__init__(in_features, out_features, bias, device, dtype)
 
         if weight_quant_args == None:
             weight_quant_args = (
@@ -142,7 +142,7 @@ class Linear(nn.Linear):
         return nr
 
     @logger_forward
-    def forward(self, invals: Data_wrapper, factor_fun: FunctionType = None) -> torch.Tensor:
+    def forward(self, invals: DataWrapper, factor_fun: FunctionType = None) -> torch.Tensor:
         """
         forward Computes the Linear layer with quantization
 

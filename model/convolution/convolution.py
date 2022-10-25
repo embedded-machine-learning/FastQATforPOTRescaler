@@ -10,7 +10,7 @@ from torch.nn.common_types import _size_2_t, Tensor
 # module imports
 from ..Quantizer import Quant, get_abs, FakeQuant, LinQuantExpScale
 from ..logger import logger_init,logger_forward
-from ..Type import Data_wrapper
+from ..DataWrapper import DataWrapper
 
 # current module imports
 from .weight_quantization import LinQuantWeight
@@ -192,8 +192,8 @@ class Conv2d(nn.Conv2d):
 
     @logger_forward
     def forward(
-        self, invals: Data_wrapper, factor_fun: FunctionType = None
-    ) -> Data_wrapper:
+        self, invals: DataWrapper, factor_fun: FunctionType = None
+    ) -> DataWrapper:
         """
         forward Computes the convolution with quantized weights
 

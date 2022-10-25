@@ -6,7 +6,7 @@ from torch.nn.common_types import _size_any_t, _size_any_opt_t
 from typing import Optional
 
 from ..logger import logger_forward, logger_init
-from ..Type import Data_wrapper
+from ..DataWrapper import DataWrapper
 
 
 class MaxPool2d(nn.MaxPool2d):
@@ -22,7 +22,7 @@ class MaxPool2d(nn.MaxPool2d):
         super(MaxPool2d, self).__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)
         assert return_indices == False
 
-    def forward(self, input: Data_wrapper):
+    def forward(self, input: DataWrapper):
         val, rexp = input.get()
         return input.set(
             F.max_pool2d(
@@ -37,7 +37,7 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d):
     def __init__(self, output_size: _size_any_opt_t) -> None:
         super(AdaptiveAvgPool2d,self).__init__(output_size)
 
-    def forward(self, input:Data_wrapper) -> Data_wrapper:
+    def forward(self, input:DataWrapper) -> DataWrapper:
         # does nopt modify the channels so simple wrapping and floor should be enough
         val, rexp = input.get()
 

@@ -2,9 +2,9 @@ from turtle import forward
 import torch
 import torch.nn as nn
 
-from ..Type import Data_wrapper 
+from ..DataWrapper import DataWrapper 
 
-def Flatten(input: Data_wrapper, dim: int) -> Data_wrapper:
+def Flatten(input: DataWrapper, dim: int) -> DataWrapper:
     """
     Flatten encapsulation of torch.flatten
     """
@@ -16,5 +16,5 @@ class FlattenM(nn.Module):
     def __init__(self,dim) -> None:
         super(FlattenM,self).__init__()
         self.dim = dim
-    def forward(self,input:Data_wrapper) -> Data_wrapper:
+    def forward(self,input:DataWrapper) -> DataWrapper:
         return Flatten(input,self.dim)
