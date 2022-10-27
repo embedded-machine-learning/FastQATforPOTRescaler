@@ -37,10 +37,9 @@ class LinQuantWeight(Quant):
         else:
             self.rexp_view=(1,-1,1,1)
 
-        if size == (-1,):
-            self.register_buffer("abs", torch.ones(1))
-        else:
-            self.register_buffer("abs", torch.ones(size))
+
+        self.register_buffer("abs", torch.ones_like(self.delta_in))
+       
 
         assert self.bits > 0
         self.register_buffer("delta_in_factor", torch.tensor(2.0 / (2.0**self.bits)))

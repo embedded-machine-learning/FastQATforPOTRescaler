@@ -13,6 +13,21 @@ from .Quantizer import FakeQuant
 from .DataWrapper import DataWrapper
 
 
+class Start_int(nn.Module):
+    @logger_init
+    def __init__(self, delta_in: Tensor, min: Tensor, max: Tensor) -> None:
+        super(Start_int, self).__init__()
+        self.register_buffer("delta_in", delta_in)
+        self.register_buffer("min", min)
+        self.register_buffer("max", max)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = x.div(self.delta_in, rounding_mode="floor")
+        x = x.type(torch.int8)
+        x = x.clamp(self.min, self.max)
+        return x
+
+
 class Start(nn.Module):
     """
     Start Transforms passed values into the quantized/fake quantized domain
@@ -50,6 +65,9 @@ class Start(nn.Module):
         self.register_buffer("in_max", torch.Tensor([-10000.0]))
         self.register_buffer("in_min", torch.Tensor([10000.0]))
 
+    def int_extract(self,type_small=torch.int8,type_big=torch.int32) -> Start_int:
+        return Start_int(self.delta_in, self.min.type(type_big), self.max.type(type_big))
+
     @logger_forward
     def forward(self, x: Tensor) -> DataWrapper:
         with torch.no_grad():
@@ -79,6 +97,16 @@ class Start(nn.Module):
             torch.log2(self.delta_out),
         )
 
+class Stop_int(nn.Module):
+    def __init__(self,rexp) -> None:
+        super(Stop_int,self).__init__()
+        self.register_buffer('rexp',rexp)
+        self.register_buffer('mult_factor',rexp.exp2())
+        
+    def forward(self,x:Tensor)->Tensor:
+        # print(x)
+        # print(self.rexp)
+        return x.type(torch.float32).mul(self.mult_factor)
 
 class Stop(nn.Module):
     """
@@ -97,6 +125,9 @@ class Stop(nn.Module):
         self.size = size
         self.register_buffer("exp", torch.zeros(self.size))
         self.register_buffer("for_dtype", torch.zeros(1))  # Only required to know the current datatype
+
+    def int_extract(self)-> Stop_int:
+        return Stop_int(self.exp)
 
     @logger_forward
     def forward(self, invals: DataWrapper) -> Tensor:

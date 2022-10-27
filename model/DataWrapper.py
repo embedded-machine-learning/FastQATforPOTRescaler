@@ -14,25 +14,23 @@ class DataWrapper:
     There is also meta data contained such as a quantization base 'quant_val'
 
     """
+
     value = torch.empty((1))
     rexp = torch.empty((1))
 
-
     quant_val = None
 
-    to_copy = [
-        'quant_val'
-    ]
+    to_copy = ["quant_val"]
 
-    def __init__(self,value=None,rexp=None) -> None:
-        super(DataWrapper,self).__init__()
+    def __init__(self, value=None, rexp=None) -> None:
+        super(DataWrapper, self).__init__()
         self.value = value
         self.rexp = rexp
 
-    def __repr__(self)-> str:
+    def __repr__(self) -> str:
         return f"value:{self.value}, rexp:{self.rexp}, quant_fnc:{self.quant_val}"
 
-    def copy(self,other:'DataWrapper') -> 'DataWrapper':
+    def copy(self, other: "DataWrapper") -> "DataWrapper":
         """
         copy copies other to current
 
@@ -42,8 +40,18 @@ class DataWrapper:
         :rtype: DataWrapper
         """
         for key in self.to_copy:
-            setattr(self,key,getattr(other,key))
+            setattr(self, key, getattr(other, key))
         return self
+
+    def clone(self) -> "DataWrapper":
+        """
+        clone Clones a whole DataWrapper
+
+        :return: The clone
+        :rtype: DataWrapper
+        """
+        ret = DataWrapper(self.value.clone(), self.rexp.clone()).copy(self)
+        return ret
 
     def get(self) -> Tuple[Tensor, Tensor]:
         """
@@ -54,7 +62,7 @@ class DataWrapper:
         """
         return self.value, self.rexp
 
-    def set(self,value:Tensor,rexp:Tensor) -> 'DataWrapper':
+    def set(self, value: Tensor, rexp: Tensor) -> "DataWrapper":
         """
         set creates a new object and adds the value and rexp to it, then copies the meta data
 
@@ -65,7 +73,7 @@ class DataWrapper:
         :return: self
         :rtype: DataWrapper
         """
-        return DataWrapper(value,rexp).copy(self)
+        return DataWrapper(value, rexp).copy(self)
 
     def __getitem__(self, key: str) -> Any:
         """
@@ -76,25 +84,24 @@ class DataWrapper:
         :return: the parameter
         :rtype: Any
         """
-        return getattr(self,key)
+        return getattr(self, key)
 
-    
-    def set_quant(self,value:Optional[Union[Tensor,'DataWrapper']]=None):
+    def set_quant(self, value: Optional[Union[Tensor, "DataWrapper"]] = None):
         """
         set_quant Sets the quantization level
 
-        Use if a quantitation level needs to be enforced later 
+        Use if a quantitation level needs to be enforced later
 
         :param value: Value to be used as base, if None use current rexp, defaults to None
         :type value: Optional[Tensor], optional
         """
         if value is None:
             value = self.rexp
-        if isinstance(value,DataWrapper):
+        if isinstance(value, DataWrapper):
             value = value.rexp
         self.quant_val = value.clone().detach().exp2()
 
-    def use_quant(self,x:Tensor)->Tensor:
+    def use_quant(self, x: Tensor) -> Tensor:
         """
         use_quant enforces a quantization level as a power of 2 multitude of 'quant_val'
 
@@ -106,4 +113,3 @@ class DataWrapper:
         if self.quant_val is None:
             return x
         return x.div(self.quant_val).log2().round().exp2().mul(self.quant_val)
-    

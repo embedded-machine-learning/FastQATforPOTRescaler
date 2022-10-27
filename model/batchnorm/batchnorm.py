@@ -74,7 +74,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
 
         super(BatchNorm2d, self).__init__(num_features, eps, momentum, affine, track_running_stats, device, dtype)
 
-        self.register_buffer("n", torch.zeros(num_features))
+        self.register_buffer("n", torch.zeros(1, num_features, 1, 1))
         self.register_buffer("t", torch.zeros(1, num_features, 1, 1))
         self.register_buffer("alpha", 1.0 / np.sqrt(2.0) * torch.ones(num_features))
 
@@ -147,6 +147,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                         mu = torch.mean(xorig, [0, 2, 3], keepdim=True)
 
                     n = self.weight.view(-1) / (quant.delta_in.view(-1) * torch.sqrt(var.view(-1) + self.eps))
+                    n = n.view(1, -1, 1, 1)
                     nr = self.func_n(
                         weight=torch.abs(self.weight.view(-1)),
                         bias=self.bias.view(-1),
@@ -191,7 +192,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                     var=self.running_var.view(-1),
                     out_quant=quant.delta_in.view(-1),
                     rexp=rexp.view(-1),
-                ).detach()
+                ).detach().view(1, -1, 1, 1)
 
                 t = self.func_t(
                     weight=self.weight.view(-1),

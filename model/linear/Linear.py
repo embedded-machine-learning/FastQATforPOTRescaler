@@ -1,17 +1,21 @@
 from types import FunctionType
+from numpy import outer
 
 import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.nn.common_types import Tensor
 
-from ..logger import logger_forward,logger_init
+from .Linear_int import Linear_int
 
-from ..Quantizer import LinQuantExpScale,FakeQuant
+from ..logger import logger_forward, logger_init
+
+from ..Quantizer import LinQuantExpScale, FakeQuant
 from ..DataWrapper import DataWrapper
 from .. import __DEBUG__
 
 from .weight_quantization import LinQuantWeight
+
 
 class Linear(nn.Linear):
     """
@@ -50,6 +54,7 @@ class Linear(nn.Linear):
     :param out_quant_kargs: Passes named arguments to the initializer of the out quantization class, defaults to {}
     :type out_quant_kargs: dict, optional
     """
+
     @logger_init
     def __init__(
         self,
@@ -68,7 +73,7 @@ class Linear(nn.Linear):
         out_quant_kargs={},
     ) -> None:
 
-        super(Linear,self).__init__(in_features, out_features, bias, device, dtype)
+        super(Linear, self).__init__(in_features, out_features, bias, device, dtype)
 
         if weight_quant_args == None:
             weight_quant_args = (
@@ -100,6 +105,17 @@ class Linear(nn.Linear):
             self.register_buffer("t", torch.zeros((1, out_features)))
         else:
             self.t = None
+
+    def int_extract(self, type_small=torch.int8, type_big=torch.int32) -> Linear_int:
+        return Linear_int(
+            self.in_features,
+            self.out_features,
+            self.quant_weight.type(type_big),
+            self.n.type(type_big),
+            self.t.type(type_big) if self.bias is not None else None,
+            self.out_quant.min.type(type_big),
+            self.out_quant.max.type(type_big),
+        )
 
     @logger_forward
     def get_weight_factor(self, delta_O: Tensor):
@@ -199,7 +215,7 @@ class Linear(nn.Linear):
             else:
                 self.t = None
 
-            self.quant_weight = weight.detach()
+            self.quant_weight = weight.detach().clone()
             self.n = self.calculate_n(
                 self.weight_quant.delta_out.view(-1).detach(),
                 2 ** rexp_mean.view(-1).detach(),
@@ -215,7 +231,7 @@ class Linear(nn.Linear):
             if self.training:
                 out2 = self.out_quant(out)
             else:
-                if bias != None:
+                if bias is not None:
                     out2 = (
                         out.mul(torch.exp2(self.n)).add_(self.t).clamp_(self.out_quant.min, self.out_quant.max).floor_()
                     )

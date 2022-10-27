@@ -1,5 +1,6 @@
 from typing import Union,Optional
 
+import torch
 from torch import nn
 from torch.nn.common_types import _size_2_t
 
@@ -11,6 +12,8 @@ from ..Quantizer import Quant
 from ..convolution import Conv2d
 from ..batchnorm import BatchNorm2d
 from ..activations import ReLU
+
+from .ConvBnA_int import ConvBnA_int
 
 
 class ConvBnA(nn.Module):
@@ -149,6 +152,22 @@ class ConvBnA(nn.Module):
             self.activation = ReLU(*activation_args, **activation_kargs)
         else:
             self.activation = activation(*activation_args, **activation_kargs)
+
+    def int_extract(self,type_small=torch.int8,type_big=torch.int32) -> ConvBnA_int:
+        return ConvBnA_int(
+            self.conv.in_channels,
+            self.conv.out_channels,
+            self.conv.kernel_size,
+            self.conv.stride,
+            self.conv.padding,
+            self.conv.dilation,
+            self.conv.groups,
+            self.conv.quant_weight.type(type_big),
+            self.bn.n.type(type_big),
+            self.bn.t.type(type_big),
+            self.activation.min.type(type_big),
+            self.activation.max.type(type_big)
+        )
 
     @logger_forward
     def forward(self, x: DataWrapper) -> DataWrapper:

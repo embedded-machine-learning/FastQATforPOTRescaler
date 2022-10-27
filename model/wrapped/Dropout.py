@@ -1,6 +1,6 @@
 from torch import nn
 
-from ..logger import logger_forward,logger_init
+from ..logger import logger_forward, logger_init
 from ..DataWrapper import DataWrapper
 
 
@@ -13,11 +13,15 @@ class Dropout(nn.Dropout):
     :param p: Chance, defaults to 0.5
     :type p: float, optional
     """
+
     @logger_init
     def __init__(self, p: float = 0.5) -> None:
-        super(Dropout,self).__init__(p, False)
-    
+        super(Dropout, self).__init__(p, False)
+
+    def int_extract(self):
+        return None
+
     @logger_forward
-    def forward(self,input:DataWrapper)->DataWrapper:
-        x,rexp = input.get()
-        return input.set(super(Dropout,self).forward(x),rexp)
+    def forward(self, input: DataWrapper) -> DataWrapper:
+        x, rexp = input.get()
+        return input.set(super(Dropout, self).forward(x), rexp)

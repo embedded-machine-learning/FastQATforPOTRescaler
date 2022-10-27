@@ -3,6 +3,7 @@
 # runs/*
 
 env
+new_env
 data/MNIST/*
 data/cifar-10-batches-py/*
 data

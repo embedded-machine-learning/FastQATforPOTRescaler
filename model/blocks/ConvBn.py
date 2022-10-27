@@ -1,14 +1,16 @@
 from typing import Union
 
+import torch
 from torch import nn
 from torch.nn.common_types import _size_2_t
 
 from ..DataWrapper import DataWrapper
-from ..logger import logger_forward,logger_init
+from ..logger import logger_forward, logger_init
 
 from ..convolution import Conv2d
 from ..batchnorm import BatchNorm2d
 
+from .ConvBnA_int import ConvBnA_int
 
 
 class ConvBn(nn.Module):
@@ -57,7 +59,7 @@ class ConvBn(nn.Module):
     :param fixed_n: If the batch-Norm should a single shift factor per layer, defaults to False
     :type fixed_n: bool, optional
 
-    :param out_quant: Out quantization Module ,defaults to None,    
+    :param out_quant: Out quantization Module ,defaults to None,
     :type out_quant: _type_, optional
     :param out_quant_args: Out quantization arguments ,defaults to None,
     :type out_quant_args: _type_, optional
@@ -70,6 +72,7 @@ class ConvBn(nn.Module):
     :param dtype: _description_, defaults to None
     :type dtype: _type_, optional
     """
+
     @logger_init
     def __init__(
         self,
@@ -137,6 +140,22 @@ class ConvBn(nn.Module):
             out_quant=out_quant,
             out_quant_args=out_quant_args,
             out_quant_kargs=out_quant_kargs,
+        )
+
+    def int_extract(self,type_small=torch.int8,type_big=torch.int32) -> ConvBnA_int:
+        return ConvBnA_int(
+            self.conv.in_channels,
+            self.conv.out_channels,
+            self.conv.kernel_size,
+            self.conv.stride,
+            self.conv.padding,
+            self.conv.dilation,
+            self.conv.groups,
+            self.conv.quant_weight.type(type_big),
+            self.bn.n.type(type_big),
+            self.bn.t.type(type_big),
+            self.bn.out_quant.min.type(type_big),
+            self.bn.out_quant.max.type(type_big)
         )
 
     @logger_forward

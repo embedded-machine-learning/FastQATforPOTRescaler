@@ -72,8 +72,8 @@ class Quant(nn.Module):
         self.bits = bits
         self.use_enforced_quant_level = use_enforced_quant_level
         if size == (-1,):
-            self.register_buffer("delta_in", torch.ones(1))
-            self.register_buffer("delta_out", torch.ones(1))
+            self.register_buffer("delta_in", torch.ones((1,)))
+            self.register_buffer("delta_out", torch.ones((1,)))
             self.size = (1,)
             self.simple = True
         else:
