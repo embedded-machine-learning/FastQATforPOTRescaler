@@ -5,6 +5,7 @@ from torch import nn
 from torch.nn.common_types import Tensor,_size_2_t
 
 from ..logger import logger_forward, logger_init
+from .. import __FLAGS__
 
 class ConvBnA_int(nn.Module):
     """
@@ -57,6 +58,8 @@ class ConvBnA_int(nn.Module):
         self.Conv.weight.data=Conv_weight
 
         self.register_buffer("n",BN_shift)
+        self.register_buffer("n_eq_mult",BN_shift.exp2())
+
         self.register_buffer("t",BN_add)
         self.register_buffer("min",Act_min)
         self.register_buffer("max",Act_max)
@@ -65,6 +68,11 @@ class ConvBnA_int(nn.Module):
     def forward(self,x:Tensor)-> Tensor:
         x = self.Conv(x)
         x = x+self.t
-        x = torch.bitwise_right_shift(x,-self.n)
+
+        if __FLAGS__['ONNX_EXPORT']:
+            x = x.type(torch.float).mul(self.n_eq_mult).floor().type(torch.int)
+        else:
+            x = torch.bitwise_right_shift(x,-self.n)
+
         x = x.clamp(self.min,self.max)
         return x

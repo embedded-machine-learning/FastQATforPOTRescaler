@@ -3,6 +3,8 @@ from torch import nn
 from torch.nn.common_types import Tensor
 import torch.nn.functional as F
 
+from .. import __FLAGS__
+
 
 class Linear_int(nn.Linear):
     def __init__(
@@ -19,6 +21,7 @@ class Linear_int(nn.Linear):
         self.weight.requires_grad_(False)
         self.weight.data = quant_weights
         self.register_buffer("n", shift)
+        self.register_buffer("n_eq_mult", shift.exp2())
         if bias is not None:
             self.register_buffer("t", bias)
         else:
@@ -28,7 +31,12 @@ class Linear_int(nn.Linear):
 
     def forward(self, x: Tensor) -> Tensor:
         out = F.linear(x, self.weight, None)
-        out = torch.bitwise_right_shift(out, -self.n)
+
+        if __FLAGS__['ONNX_EXPORT']:
+            out = out.type(torch.float).mul(self.n_eq_mult).floor().type(torch.int)
+        else:
+            out = torch.bitwise_right_shift(out, -self.n)
+
         if self.t is not None:
             out = out + self.t
         out = out.clamp(self.min,self.max)

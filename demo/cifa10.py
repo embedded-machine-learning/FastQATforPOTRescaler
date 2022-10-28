@@ -200,6 +200,9 @@ else:
 print('Float')
 eval()
 
+from  model import __FLAGS__
+
+
 device = 'cpu'
 net = net.int_extract().to(device)
 print('Int')
@@ -207,6 +210,8 @@ eval()
 
 for param in net.parameters():
     param.requires_grad_(False)
+
+__FLAGS__['ONNX_EXPORT'] = True
 
 input_names = [ "actual_input_1" ] + [ "learned_%d" % i for i in range(16) ]
 output_names = [ "output1" ]

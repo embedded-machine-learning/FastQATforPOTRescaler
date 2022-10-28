@@ -78,10 +78,10 @@ class Add(nn.Module):
                 out.data = out2
         else:
             rexp = quant.delta_out.log2()
-            self.a_shift = (rexp - a[1]).detach()
-            self.b_shift = (rexp - b[1]).detach()
-            va = a[0].div(self.a_shift.exp2(), rounding_mode="floor")
-            vb = b[0].div(self.b_shift.exp2(), rounding_mode="floor")
+            self.a_shift = (a[1] - rexp).detach()
+            self.b_shift = (b[1] - rexp).detach()
+            va = a[0].mul(self.a_shift.exp2()).floor()
+            vb = b[0].mul(self.b_shift.exp2()).floor()
             out = va + vb
             out = out.clamp(quant.min, quant.max)
 
