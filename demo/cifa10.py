@@ -59,7 +59,7 @@ class Net(nn.Module):
             ConvBnA(in_channels=3,out_channels=32,kernel_size=3,stride=1,padding=1,activation=PACT),
             # ConvBnA(32,32,3,1,1,activation=PACT),
             ResidualBlock(inplanes=32,planes=32),
-            ResidualBlock(inplanes=32,planes=32),s
+            ResidualBlock(inplanes=32,planes=32),
             ResidualBlock(inplanes=32,planes=32),
             MaxPool2d(kernel_size=2,stride=2),
             Dropout(p=0.2),
