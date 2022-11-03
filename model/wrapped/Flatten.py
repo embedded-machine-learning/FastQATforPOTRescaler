@@ -46,7 +46,7 @@ class FlattenM(nn.Module):
         super(FlattenM, self).__init__()
         self.dim = dim
 
-    def int_extract(self) -> FlattenM_int:
+    def int_extract(self, type_small=torch.int8, type_big=torch.int32) -> FlattenM_int:
         return FlattenM_int(self.dim)
 
     @logger_forward

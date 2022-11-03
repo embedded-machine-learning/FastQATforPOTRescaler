@@ -70,7 +70,7 @@ class ConvBnA_int(nn.Module):
         x = x+self.t
 
         if __FLAGS__['ONNX_EXPORT']:
-            x = x.type(torch.float).mul(self.n_eq_mult).floor().type(torch.int)
+            x = x.type(torch.float).mul(self.n_eq_mult).floor().type(self.n.dtype)
         else:
             x = torch.bitwise_right_shift(x,-self.n)
 

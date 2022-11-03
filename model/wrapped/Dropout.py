@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 
 from ..logger import logger_forward, logger_init
@@ -18,7 +19,7 @@ class Dropout(nn.Dropout):
     def __init__(self, p: float = 0.5) -> None:
         super(Dropout, self).__init__(p, False)
 
-    def int_extract(self):
+    def int_extract(self, type_small=torch.int8, type_big=torch.int32):
         return None
 
     @logger_forward

@@ -20,8 +20,8 @@ class Add_int(nn.Module):
     @logger_forward
     def forward(self,a:Tensor,b:Tensor)-> Tensor:
         if __FLAGS__['ONNX_EXPORT']:
-            a = a.type(torch.float).mul(self.a_shift_eq_mult).floor().type(torch.int)
-            b = b.type(torch.float).mul(self.b_shift_eq_mult).floor().type(torch.int)
+            a = a.type(torch.float).mul(self.a_shift_eq_mult).floor().type(self.a_shift.dtype)
+            b = b.type(torch.float).mul(self.b_shift_eq_mult).floor().type(self.a_shift.dtype)
         else:
             a = torch.bitwise_right_shift(a,-self.a_shift)
             b = torch.bitwise_right_shift(b,-self.b_shift)

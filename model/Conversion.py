@@ -23,7 +23,7 @@ class Start_int(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         x = x.div(self.delta_in, rounding_mode="floor")
-        x = x.type(torch.int8)
+        x = x.type(self.max.dtype)
         x = x.clamp(self.min, self.max)
         return x
 

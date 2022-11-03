@@ -1,4 +1,4 @@
-from typing import Union,Optional
+from typing import Union, Optional
 
 import torch
 from torch import nn
@@ -6,7 +6,7 @@ from torch.nn.common_types import _size_2_t
 
 
 from ..DataWrapper import DataWrapper
-from ..logger import logger_forward,logger_init
+from ..logger import logger_forward, logger_init
 
 from ..Quantizer import Quant
 from ..convolution import Conv2d
@@ -76,6 +76,7 @@ class ConvBnA(nn.Module):
     :param dtype: _description_, defaults to None
     :type dtype: _type_, optional
     """
+
     @logger_init
     def __init__(
         self,
@@ -100,7 +101,7 @@ class ConvBnA(nn.Module):
         track_running_stats: bool = True,
         fixed_n: bool = False,
         # Activation
-        activation:Optional[Quant]=None,
+        activation: Optional[Quant] = None,
         activation_args=None,
         activation_kargs={},
         # General stuff
@@ -147,13 +148,13 @@ class ConvBnA(nn.Module):
         )
 
         if activation_args is None:
-            activation_args = [8,(1,out_channels,1,1)]
+            activation_args = [8, (1, out_channels, 1, 1)]
         if activation == None:
             self.activation = ReLU(*activation_args, **activation_kargs)
         else:
             self.activation = activation(*activation_args, **activation_kargs)
 
-    def int_extract(self,type_small=torch.int8,type_big=torch.int32) -> ConvBnA_int:
+    def int_extract(self, type_small=torch.int8, type_big=torch.int32) -> ConvBnA_int:
         return ConvBnA_int(
             self.conv.in_channels,
             self.conv.out_channels,
@@ -166,15 +167,14 @@ class ConvBnA(nn.Module):
             self.bn.n.type(type_big),
             self.bn.t.type(type_big),
             self.activation.min.type(type_big),
-            self.activation.max.type(type_big)
+            self.activation.max.type(type_big),
         )
 
     @logger_forward
     def forward(self, x: DataWrapper) -> DataWrapper:
 
-
         fact = self.bn.get_weight_factor()
         x = self.conv(x, fact)
-        x = self.bn(x,self.activation)
+        x = self.bn(x, self.activation)
 
         return x
