@@ -21,7 +21,7 @@ transform = transforms.Compose(
      transforms.Normalize((0.5, 0.5, 0.5), (1, 1, 1))])
 
 batch_size = 80
-epochs = 100
+epochs = 10
 
 
 trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
@@ -55,47 +55,47 @@ class Net(nn.Module):
         #     Linear(in_features=16*16*32,out_features=10,weight_quant_channel_wise=True)
         # )
 
-        self.seq = Sequential(
-            ConvBnA(in_channels=3,out_channels=32,kernel_size=3,stride=1,padding=1,activation=PACT),
-            # ConvBnA(32,32,3,1,1,activation=PACT),
-            ResidualBlock(inplanes=32,planes=32),
-            ResidualBlock(inplanes=32,planes=32),
-            ResidualBlock(inplanes=32,planes=32),
-            MaxPool2d(kernel_size=2,stride=2),
-            Dropout(p=0.2),
-            ConvBnA(in_channels=32,out_channels=64,kernel_size=3,stride=1,padding=1,activation=PACT),
-            # ConvBnA(64,64,3,1,1,activation=PACT),
-            ResidualBlock(inplanes=64,planes=64),
-            MaxPool2d(kernel_size=2,stride=2),
-            Dropout(p=0.3),
-            ConvBnA(in_channels=64,out_channels=128,kernel_size=3,stride=1,padding=1,activation=PACT),
-            # ConvBnA(128,128,3,1,1,activation=PACT),
-            ResidualBlock(inplanes=128,planes=128),
-            MaxPool2d(kernel_size=2,stride=2),
-            Dropout(p=0.4),
-            FlattenM(dim=1),
-            Linear(in_features=128*4*4,out_features=128,out_quant=PACT,weight_quant_channel_wise=True),
-            Dropout(p=0.5),
-            Linear(in_features=128,out_features=10,weight_quant_channel_wise=True)
-        )
-        # self.seq = nn.Sequential(
-        #     ConvBnA(3,32,3,1,1,activation=PACT),
-        #     ConvBnA(32,32,3,1,1,activation=PACT),
-        #     MaxPool2d(2,2),
-        #     Dropout(0.2),
-        #     ConvBnA(32,64,3,1,1,activation=PACT),
-        #     ConvBnA(64,64,3,1,1,activation=PACT),
-        #     MaxPool2d(2,2),
-        #     Dropout(0.3),
-        #     ConvBnA(64,128,3,1,1,activation=PACT),
-        #     ConvBnA(128,128,3,1,1,activation=PACT),
-        #     MaxPool2d(2,2),
-        #     Dropout(0.4),
-        #     FlattenM(1),
-        #     Linear(128*4*4,128,out_quant=PACT),
-        #     Dropout(0.5),
-        #     Linear(128,10)
+        # self.seq = Sequential(
+        #     ConvBnA(in_channels=3,out_channels=32,kernel_size=3,stride=1,padding=1,activation=PACT),
+        #     # ConvBnA(32,32,3,1,1,activation=PACT),
+        #     ResidualBlock(inplanes=32,planes=32),
+        #     ResidualBlock(inplanes=32,planes=32),
+        #     ResidualBlock(inplanes=32,planes=32),
+        #     MaxPool2d(kernel_size=2,stride=2),
+        #     Dropout(p=0.2),
+        #     ConvBnA(in_channels=32,out_channels=64,kernel_size=3,stride=1,padding=1,activation=PACT),
+        #     # ConvBnA(64,64,3,1,1,activation=PACT),
+        #     ResidualBlock(inplanes=64,planes=64),
+        #     MaxPool2d(kernel_size=2,stride=2),
+        #     Dropout(p=0.3),
+        #     ConvBnA(in_channels=64,out_channels=128,kernel_size=3,stride=1,padding=1,activation=PACT),
+        #     # ConvBnA(128,128,3,1,1,activation=PACT),
+        #     ResidualBlock(inplanes=128,planes=128),
+        #     MaxPool2d(kernel_size=2,stride=2),
+        #     Dropout(p=0.4),
+        #     FlattenM(dim=1),
+        #     Linear(in_features=128*4*4,out_features=128,out_quant=PACT,weight_quant_channel_wise=True),
+        #     Dropout(p=0.5),
+        #     Linear(in_features=128,out_features=10,weight_quant_channel_wise=True)
         # )
+        self.seq = Sequential(
+            ConvBnA(3,32,3,1,1,activation=PACT),
+            ConvBnA(32,32,3,1,1,activation=PACT),
+            MaxPool2d(2,2),
+            Dropout(0.2),
+            ConvBnA(32,64,3,1,1,activation=PACT),
+            ConvBnA(64,64,3,1,1,activation=PACT),
+            MaxPool2d(2,2),
+            Dropout(0.3),
+            ConvBnA(64,128,3,1,1,activation=PACT),
+            ConvBnA(128,128,3,1,1,activation=PACT),
+            MaxPool2d(2,2),
+            Dropout(0.4),
+            FlattenM(1),
+            Linear(128*4*4,128,out_quant=PACT,weight_quant_channel_wise=True),
+            Dropout(0.5),
+            Linear(128,10,weight_quant_channel_wise=True)
+        )
 
     def forward(self, x):
         x = self.start(x)
@@ -198,7 +198,7 @@ else:
     net.load_state_dict(torch.load("./demo/cifa10/ckp.pt"))
 
 print('Float')
-eval()
+# eval()
 
 from  model import __FLAGS__
 
@@ -206,7 +206,7 @@ from  model import __FLAGS__
 device = 'cpu'
 net = net.int_extract().to(device)
 print('Int')
-eval()
+# eval()
 torch.save(net.state_dict(),"./demo/cifa10/Int.pt")
 
 for param in net.parameters():
@@ -222,7 +222,7 @@ torch.onnx.export(net,         # model being run
         "./demo/cifa10/Int.onnx",       # where to save the model  
         export_params=True,  # store the trained parameter weights inside the model file 
         do_constant_folding=False,  # whether to execute constant folding for optimization 
-        opset_version=10,
+        opset_version=17,
         input_names = ['modelInput'],   # the model's input names 
         output_names = ['modelOutput'], # the model's output names 
         dynamic_axes={'modelInput' : {0 : 'batch_size'},    # variable length axes 

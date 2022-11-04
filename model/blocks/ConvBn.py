@@ -142,7 +142,9 @@ class ConvBn(nn.Module):
             out_quant_kargs=out_quant_kargs,
         )
 
-    def int_extract(self,type_small=torch.int8,type_big=torch.int32) -> ConvBnA_int:
+    def int_extract(
+        self, accumulation_type=torch.int32, small_signed_type=torch.int8, small_unsigned_type=torch.uint8
+    ) -> ConvBnA_int:
         return ConvBnA_int(
             self.conv.in_channels,
             self.conv.out_channels,
@@ -151,11 +153,14 @@ class ConvBn(nn.Module):
             self.conv.padding,
             self.conv.dilation,
             self.conv.groups,
-            self.conv.quant_weight.type(type_big),
-            self.bn.n.type(type_big),
-            self.bn.t.type(type_big),
-            self.bn.out_quant.min.type(type_big),
-            self.bn.out_quant.max.type(type_big)
+            self.conv.quant_weight,
+            self.bn.n,
+            self.bn.t,
+            self.bn.out_quant.min,
+            self.bn.out_quant.max,
+            accumulation_type=accumulation_type,
+            small_signed_type=small_signed_type,
+            small_unsigned_type=small_unsigned_type,
         )
 
     @logger_forward

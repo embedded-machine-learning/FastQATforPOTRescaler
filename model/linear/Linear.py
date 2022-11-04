@@ -78,7 +78,7 @@ class Linear(nn.Linear):
         if weight_quant_args == None:
             weight_quant_args = (
                 weight_quant_bits,
-                (-1,) if not weight_quant_channel_wise else (out_features, 1),
+                1 if not weight_quant_channel_wise else (out_features, 1),
                 "trunc",
             )
 
@@ -106,15 +106,18 @@ class Linear(nn.Linear):
         else:
             self.t = None
 
-    def int_extract(self, type_small=torch.int8, type_big=torch.int32) -> Linear_int:
+    def int_extract(self, accumulation_type = torch.int32, small_signed_type = torch.int8, small_unsigned_type=torch.uint8) -> Linear_int:
         return Linear_int(
             self.in_features,
             self.out_features,
-            self.quant_weight.type(type_big),
-            self.n.type(type_big),
-            self.t.type(type_big) if self.bias is not None else None,
-            self.out_quant.min.type(type_big),
-            self.out_quant.max.type(type_big),
+            self.quant_weight,
+            self.n,
+            self.t if self.bias is not None else None,
+            self.out_quant.min,
+            self.out_quant.max,
+            accumulation_type = accumulation_type,
+            small_signed_type = small_signed_type,
+            small_unsigned_type = small_unsigned_type,
         )
 
     @logger_forward

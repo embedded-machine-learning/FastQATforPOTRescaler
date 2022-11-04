@@ -36,13 +36,11 @@ class MaxPool2d_int(nn.MaxPool2d):
         padding: _size_any_t = 0,
         dilation: _size_any_t = 1,
         ceil_mode: bool = False,
-        type_big = torch.int32
     ) -> None:
         super(MaxPool2d_int, self).__init__(kernel_size, stride, padding, dilation, False, ceil_mode)
-        self.register_buffer("for_dtype",torch.zeros(1,dtype=type_big))
     @logger_forward
     def forward(self, input: Tensor):
-        return super(MaxPool2d_int, self).forward(input.type(torch.float)).type(self.for_dtype.dtype)
+        return super(MaxPool2d_int, self).forward(input.to(torch.float)).to(input.dtype)
 
 
 class MaxPool2d(nn.MaxPool2d):
@@ -74,14 +72,13 @@ class MaxPool2d(nn.MaxPool2d):
     ) -> None:
         super(MaxPool2d, self).__init__(kernel_size, stride, padding, dilation, False, ceil_mode)
 
-    def int_extract(self, type_small=torch.int8, type_big=torch.int32) -> MaxPool2d_int:
+    def int_extract(self, accumulation_type=torch.int32, small_signed_type=torch.int8, small_unsigned_type=torch.uint8) -> MaxPool2d_int:
         return MaxPool2d_int(
             kernel_size=self.kernel_size,
             stride=self.stride,
             padding=self.padding,
             dilation=self.dilation,
             ceil_mode=self.ceil_mode,
-            type_big = type_big
         )
 
     @logger_forward

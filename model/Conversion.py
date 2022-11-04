@@ -15,16 +15,27 @@ from .DataWrapper import DataWrapper
 
 class Start_int(nn.Module):
     @logger_init
-    def __init__(self, delta_in: Tensor, min: Tensor, max: Tensor) -> None:
+    def __init__(
+        self,
+        delta_in: Tensor,
+        min: Tensor,
+        max: Tensor,
+        accumulation_type=torch.int32,
+        small_signed_type=torch.int8,
+        small_unsigned_type=torch.uint8,
+    ) -> None:
         super(Start_int, self).__init__()
         self.register_buffer("delta_in", delta_in)
-        self.register_buffer("min", min)
-        self.register_buffer("max", max)
+        self.register_buffer("min", min.to(accumulation_type))
+        self.register_buffer("max", max.to(accumulation_type))
+        self.accumulation_type = accumulation_type
+        self.small_signed_type = small_signed_type
+        self.small_unsigned_type = small_unsigned_type
 
     def forward(self, x: Tensor) -> Tensor:
         x = x.div(self.delta_in, rounding_mode="floor")
-        x = x.type(self.max.dtype)
-        x = x.clamp(self.min, self.max)
+        x = x.to(self.max.dtype)
+        x = x.clamp(self.min, self.max).to(self.small_signed_type)
         return x
 
 
@@ -65,8 +76,17 @@ class Start(nn.Module):
         self.register_buffer("in_max", torch.Tensor([-10000.0]))
         self.register_buffer("in_min", torch.Tensor([10000.0]))
 
-    def int_extract(self,type_small=torch.int8,type_big=torch.int32) -> Start_int:
-        return Start_int(self.delta_in, self.min.type(type_big), self.max.type(type_big))
+    def int_extract(
+        self, accumulation_type=torch.int32, small_signed_type=torch.int8, small_unsigned_type=torch.uint8
+    ) -> Start_int:
+        return Start_int(
+            self.delta_in,
+            self.min,
+            self.max,
+            accumulation_type=accumulation_type,
+            small_signed_type=small_signed_type,
+            small_unsigned_type=small_unsigned_type,
+        )
 
     @logger_forward
     def forward(self, x: Tensor) -> DataWrapper:
@@ -97,16 +117,18 @@ class Start(nn.Module):
             torch.log2(self.delta_out),
         )
 
+
 class Stop_int(nn.Module):
-    def __init__(self,rexp) -> None:
-        super(Stop_int,self).__init__()
-        self.register_buffer('rexp',rexp)
-        self.register_buffer('mult_factor',rexp.exp2())
-        
-    def forward(self,x:Tensor)->Tensor:
+    def __init__(self, rexp) -> None:
+        super(Stop_int, self).__init__()
+        self.register_buffer("rexp", rexp)
+        self.register_buffer("mult_factor", rexp.exp2())
+
+    def forward(self, x: Tensor) -> Tensor:
         # print(x)
         # print(self.rexp)
-        return x.type(torch.float32).mul(self.mult_factor)
+        return x.to(torch.float32).mul(self.mult_factor)
+
 
 class Stop(nn.Module):
     """
@@ -126,7 +148,7 @@ class Stop(nn.Module):
         self.register_buffer("exp", torch.zeros(self.size))
         self.register_buffer("for_dtype", torch.zeros(1))  # Only required to know the current datatype
 
-    def int_extract(self)-> Stop_int:
+    def int_extract(self, accumulation_type=torch.int32, small_signed_type=torch.int8, small_unsigned_type=torch.uint8) -> Stop_int:
         return Stop_int(self.exp)
 
     @logger_forward
@@ -137,5 +159,5 @@ class Stop(nn.Module):
             if not self.training:
                 shape = [1 for _ in range(len(x.shape))]
                 shape[1] = -1
-                x = x.type(self.for_dtype.dtype).mul_(rexp.exp2().view(*shape))
+                x = x.to(self.for_dtype.dtype).mul_(rexp.exp2().view(*shape))
         return x

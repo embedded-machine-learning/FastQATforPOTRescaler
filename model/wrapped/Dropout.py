@@ -19,7 +19,7 @@ class Dropout(nn.Dropout):
     def __init__(self, p: float = 0.5) -> None:
         super(Dropout, self).__init__(p, False)
 
-    def int_extract(self, type_small=torch.int8, type_big=torch.int32):
+    def int_extract(self, accumulation_type=torch.int32, small_signed_type=torch.int8, small_unsigned_type=torch.uint8):
         return None
 
     @logger_forward

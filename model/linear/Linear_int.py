@@ -16,28 +16,49 @@ class Linear_int(nn.Linear):
         bias: Tensor,
         Act_min: Tensor,
         Act_max: Tensor,
+        accumulation_type=torch.int32,
+        small_signed_type=torch.int8,
+        small_unsigned_type=torch.uint8,
     ) -> None:
         super().__init__(in_features, out_features, False)
         self.weight.requires_grad_(False)
-        self.weight.data = quant_weights
-        self.register_buffer("n", shift)
+        self.weight.data = quant_weights.to(small_signed_type)
+        self.register_buffer("n", shift.to(accumulation_type))
         self.register_buffer("n_eq_mult", shift.exp2())
         if bias is not None:
-            self.register_buffer("t", bias)
+            self.register_buffer("t", bias.to(accumulation_type))
         else:
             self.t = None
-        self.register_buffer("min", Act_min)
-        self.register_buffer("max", Act_max)
+        self.register_buffer("min", Act_min.to(accumulation_type))
+        self.register_buffer("max", Act_max.to(accumulation_type))
+
+        self.pure_positive = torch.all(Act_min>=0).cpu().numpy()
+
+        self.accumulation_type = accumulation_type
+        self.small_signed_type = small_signed_type
+        self.small_unsigned_type = small_unsigned_type
 
     def forward(self, x: Tensor) -> Tensor:
-        out = F.linear(x, self.weight, None)
 
-        if __FLAGS__['ONNX_EXPORT']:
-            out = out.type(torch.float).mul(self.n_eq_mult).floor().type(torch.int)
+        if __FLAGS__["ONNX_EXPORT"]:
+            out = F.linear(x.float(), self.weight.float(), None).to(self.accumulation_type)
+        else:
+            out = F.linear(x.to(self.accumulation_type), self.weight.to(self.accumulation_type), None)
+
+
+        if __FLAGS__["ONNX_EXPORT"]:
+            out = out.to(torch.float).mul(self.n_eq_mult).floor().to(self.accumulation_type)
         else:
             out = torch.bitwise_right_shift(out, -self.n)
 
         if self.t is not None:
             out = out + self.t
-        out = out.clamp(self.min,self.max)
+        
+        out = out.clamp(self.min, self.max)
+
+        if self.pure_positive:
+            out = out.to(self.small_unsigned_type)
+        else:
+            out = out.to(self.small_signed_type)
+
         return out
