@@ -94,8 +94,16 @@ class Start(nn.Module):
             if self.training:
                 if self.mode == "auto" and self.auto_runs > 0:
                     self.last_run_train = True
-                    self.in_min = torch.min(torch.min(x), self.in_min)
-                    self.in_max = torch.max(torch.max(x), self.in_max)
+                    tmp_in_min = torch.min(torch.min(x), self.in_min)
+                    tmp_in_max = torch.max(torch.max(x), self.in_max)
+
+                    if torch.all(tmp_in_min == 0) and torch.all(tmp_in_max == 0):
+                        self.auto_runs +=2
+                        tmp_in_min = tmp_in_min-1
+                        tmp_in_max = tmp_in_max+1
+
+                    self.in_min = tmp_in_min
+                    self.in_max = tmp_in_max
                     rang = 2 * (torch.max(torch.abs(self.in_min), torch.abs(self.in_max)))
                     self.delta_in = rang / (2.0 ** (-self.run) - 1)
                     self.delta_out = rang / (2.0 ** (-self.run) - 1)
@@ -103,6 +111,7 @@ class Start(nn.Module):
                 if self.last_run_train:
                     self.last_run_train = False
                     self.auto_runs -= 1
+                    print("reduce autorun by 1")
 
         return DataWrapper(
             FakeQuant(
