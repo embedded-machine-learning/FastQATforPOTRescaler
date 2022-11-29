@@ -6,6 +6,7 @@ from types import FunctionType
 from typing import Tuple
 
 from ..Quantizer import FakeQuant
+from ..linear.weight_quantization import LinQuantWeight
 
 
 class LinQuantWeight_mod_F8NET(LinQuantWeight):

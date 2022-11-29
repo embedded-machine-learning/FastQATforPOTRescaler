@@ -87,6 +87,13 @@ class Start(nn.Module):
             small_signed_type=small_signed_type,
             small_unsigned_type=small_unsigned_type,
         )
+    
+    def train(self, mode: bool = True):
+        if mode == False and self.last_run_train and self.auto_runs > 0:
+            self.last_run_train = False
+            self.auto_runs -= 1
+            print("reduce autorun by 1:",self.auto_runs,'min/max',self.in_min,'/',self.in_max)
+        return super().train(mode)
 
     @logger_forward
     def forward(self, x: Tensor) -> DataWrapper:
@@ -98,21 +105,21 @@ class Start(nn.Module):
                     tmp_in_max = torch.max(torch.max(x), self.in_max)
 
                     if torch.all(tmp_in_min == 0) and torch.all(tmp_in_max == 0):
+                        print('error state detected')
                         self.auto_runs +=2
                         tmp_in_min = tmp_in_min-1
                         tmp_in_max = tmp_in_max+1
-
-                    self.in_min = tmp_in_min
-                    self.in_max = tmp_in_max
-                    rang = 2 * (torch.max(torch.abs(self.in_min), torch.abs(self.in_max)))
+                        rang = 2 * (torch.max(torch.abs(tmp_in_min), torch.abs(tmp_in_max)))
+                    else:
+                        self.in_min = tmp_in_min
+                        self.in_max = tmp_in_max
+                        rang = 2 * (torch.max(torch.abs(self.in_min), torch.abs(self.in_max)))
+                    
+                    if self.in_min == 0 and self.in_max>0:
+                        rang = self.in_max
                     self.delta_in = rang / (2.0 ** (-self.run) - 1)
                     self.delta_out = rang / (2.0 ** (-self.run) - 1)
-            else:
-                if self.last_run_train:
-                    self.last_run_train = False
-                    self.auto_runs -= 1
-                    print("reduce autorun by 1")
-
+                
         return DataWrapper(
             FakeQuant(
                 x.clone(),

@@ -117,7 +117,7 @@ class Conv2d(nn.Conv2d):
         if weight_quant == None:
             self.weight_quant = LinQuantWeight(*weight_quant_args, **weight_quant_kargs)
         else:
-            self.weight_quant = weight_quant
+            self.weight_quant = weight_quant(*weight_quant_args, **weight_quant_kargs)
 
         # Out Quant
         # only used if factor_fun in forward is None
