@@ -204,12 +204,12 @@ class Linear(nn.Linear):
         else:
             bias = FakeQuant(
                 x=self.bias.clone().view(1, -1),
-                delta_in=self.out_quant.delta_in,
-                delta_out=self.out_quant.delta_out,
+                delta_in=self.weight_quant.delta_out.view(-1).detach() * (rexp_mean.view(-1).detach().exp2())/fact.view(-1),
+                delta_out=self.weight_quant.delta_out.view(-1).detach() * (rexp_mean.view(-1).detach().exp2())/fact.view(-1),
                 training=self.training,
-                min_quant=self.out_quant.min,
-                max_quant=self.out_quant.max,
-                rounding_mode=self.out_quant.rounding_mode,
+                min_quant=-2**31,
+                max_quant=2**31 - 1,
+                rounding_mode="floor",
             )
 
         if not self.training:
@@ -225,21 +225,21 @@ class Linear(nn.Linear):
                 self.out_quant.delta_in.view(-1).detach(),
             ).view(1, -1)
 
-        if self.training:
-            out = F.linear(x, weight, bias)
-        else:
-            out = F.linear(x, weight, None)
+        # if self.training:
+        out = F.linear(x, weight, bias)
+        # else:
+        #     out = F.linear(x, weight, None)
 
         if factor_fun == None:
             if self.training:
                 out2 = self.out_quant(out)
             else:
-                if bias is not None:
-                    out2 = (
-                        out.mul(torch.exp2(self.n)).add_(self.t).clamp_(self.out_quant.min, self.out_quant.max).floor_()
-                    )
-                else:
-                    out2 = out.mul(torch.exp2(self.n)).clamp_(self.out_quant.min, self.out_quant.max).floor_()
+                # if bias is not None:
+                #     out2 = (
+                #         out.mul(torch.exp2(self.n)).add_(self.t).clamp_(self.out_quant.min, self.out_quant.max).floor_()
+                #     )
+                # else:
+                out2 = out.mul(torch.exp2(self.n)).clamp_(self.out_quant.min, self.out_quant.max).floor_()
             return invals.set(out2, torch.log2(self.out_quant.delta_out.detach()))
         else:
             return invals.set(out, rexp_mean + self.weight_quant.delta_out.log2().view(1, -1))

@@ -18,6 +18,8 @@ def FakeQuant(
     min_quant: Tensor,
     max_quant: Tensor,
     rounding_mode: str = "floor",
+    clamp: bool = True,
+    random: bool = False,
 ) -> Tensor:
     """
     FakeQuant fake quantizes a Tensor
@@ -41,11 +43,32 @@ def FakeQuant(
     :return: The fake quantized value, of if training is false the quantized value
     :rtype: Tensor
     """
+    # with torch.no_grad():
+    #     if training:
+    #         if clamp:
+    #             x.data.div_(delta_in, rounding_mode=rounding_mode).clamp_(min_quant, max_quant).mul_(delta_out)
+    #         else:
+    #             x.data.div_(delta_in, rounding_mode=rounding_mode).mul_(delta_out)
+    #     else:
+    #         x = x.data.div(delta_in, rounding_mode=rounding_mode).clamp_(min_quant, max_quant)
+    # return x
     with torch.no_grad():
         if training:
-            x.data.div_(delta_in, rounding_mode=rounding_mode).clamp_(min_quant, max_quant).mul_(delta_out)
+            x.data.div_(delta_in)
         else:
-            x = x.data.div(delta_in, rounding_mode=rounding_mode).clamp_(min_quant, max_quant)
+            x = x.data.div(delta_in)
+
+        if rounding_mode=='floor':
+            x.data.floor_()
+        elif rounding_mode=='trunc':
+            x.data.trunc_()
+        else:#rounding_mode=='round':
+            x.data.round_()
+        if clamp:
+            x.data.clamp_(min_quant, max_quant)
+        
+        if training:
+            x.data.mul_(delta_out)
     return x
 
 

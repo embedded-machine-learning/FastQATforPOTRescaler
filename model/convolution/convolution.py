@@ -8,12 +8,14 @@ import torch.nn as nn
 from torch.nn.common_types import _size_2_t, Tensor
 
 # module imports
-from ..logger import logger_init,logger_forward
-from ..Quantizer import LinQuantExpScale,FakeQuant
+from ..logger import logger_init, logger_forward
+from ..Quantizer import LinQuantExpScale, FakeQuant
 from ..DataWrapper import DataWrapper
 
 # current module imports
 from .weight_quantization import LinQuantWeight
+
+from .. import __DEBUG__
 
 
 class Conv2d(nn.Conv2d):
@@ -124,7 +126,8 @@ class Conv2d(nn.Conv2d):
         if out_quant_args == None:
             out_quant_args = (
                 8,
-                (1, out_channels, 1, 1)
+                (1, out_channels, 1, 1),
+                'floor'
             )
 
         if out_quant == None:
@@ -133,9 +136,9 @@ class Conv2d(nn.Conv2d):
             self.out_quant = out_quant(*out_quant_args, **out_quant_kargs)
 
         self.register_buffer("quant_weight", torch.zeros_like(self.weight))
-        self.register_buffer("n", torch.zeros(((1, out_channels, 1, 1) )))
+        self.register_buffer("n", torch.zeros(((1, out_channels, 1, 1))))
         if bias:
-            self.register_buffer("t", torch.zeros(((1, out_channels, 1, 1) )))
+            self.register_buffer("t", torch.zeros(((1, out_channels, 1, 1))))
         else:
             self.t = None
 
@@ -168,7 +171,6 @@ class Conv2d(nn.Conv2d):
                 return torch.exp2(n - nr)
 
         return fun
-
 
     @logger_forward
     def calculate_n(self, delta_W: Tensor, delta_I: Tensor, delta_O: Tensor) -> Tensor:
@@ -253,12 +255,12 @@ class Conv2d(nn.Conv2d):
         else:
             bias = FakeQuant(
                 x=self.bias.clone(),
-                delta_in=self.out_quant.delta_in.view(-1),
-                delta_out=self.out_quant.delta_out.view(-1),
+                delta_in=self.weight_quant.delta_out.view(-1).detach() * (rexp_mean.view(-1).detach().exp2())/fact.view(-1),
+                delta_out=self.weight_quant.delta_out.view(-1).detach() * (rexp_mean.view(-1).detach().exp2())/fact.view(-1),
                 training=self.training,
-                min_quant=self.out_quant.min.view(-1),
-                max_quant=self.out_quant.max.view(-1),
-                rounding_mode=self.out_quant.rounding_mode,
+                min_quant=-2**31,
+                max_quant=2**31 - 1,
+                rounding_mode="floor",
             )
 
         if not self.training:
@@ -275,31 +277,31 @@ class Conv2d(nn.Conv2d):
                     self.out_quant.delta_in.view(-1).detach(),
                 ).view(1, -1, 1, 1)
 
-        # if __DEBUG__:
-        #     self.debug_fact = fact
-        #     self.debug_weight = weight
-        #     self.debug_bias = bias
-        #     self.debug_n = self.n.clone()
+        if __DEBUG__:
+            self.debug_fact = fact
+            self.debug_weight = weight
+            self.debug_bias = bias
+            self.debug_n = self.n.clone()
 
-        if self.training:
-            out = self._conv_forward(input, weight, bias)
-        else:
-            out = self._conv_forward(
-                input,
-                weight,
-                None,
-            )
+        # if self.training:
+        out = self._conv_forward(input, weight, bias)
+        # else:
+        #     out = self._conv_forward(
+        #         input,
+        #         weight,
+        #         None,
+        #     )
 
         if factor_fun == None:
             if self.training:
                 out2 = self.out_quant(out)
             else:
-                if bias != None:
-                    out2 = (
-                        out.mul(torch.exp2(self.n)).floor_().add_(self.t).clamp_(self.out_quant.min, self.out_quant.max)
-                    )
-                else:
-                    out2 = out.mul(torch.exp2(self.n)).floor_().clamp_(self.out_quant.min, self.out_quant.max)
+                # if bias != None:
+                #     out2 = (
+                #         out.mul(torch.exp2(self.n)).floor_().add_(self.t).clamp_(self.out_quant.min, self.out_quant.max)
+                #     )
+                # else:
+                out2 = out.mul(torch.exp2(self.n)).floor_().clamp_(self.out_quant.min, self.out_quant.max)
             return invals.set(out2, torch.log2(self.out_quant.delta_out.detach()))
         else:
             return invals.set(out, rexp_mean + (self.weight_quant.delta_out.log2().detach().view(1, -1, 1, 1)))

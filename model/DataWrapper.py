@@ -15,11 +15,7 @@ class DataWrapper:
 
     """
 
-    value = torch.empty((1))
-    rexp = torch.empty((1))
 
-    quant_val = None
-    optimal_type = None
 
     to_copy = ["quant_val"]
 
@@ -27,10 +23,13 @@ class DataWrapper:
         super(DataWrapper, self).__init__()
         self.value = value
         self.rexp = rexp
-        self.optimal_type = optimal_type
+        self.quant_val = None
+        self.optimal_type = None
 
     def __repr__(self) -> str:
         return f"value shape:{self.value.shape}, rexp shape:{self.rexp.shape}, optimal_type:{self.optimal_type}, quant_fnc:{self.quant_val}"
+    def __str__(self):
+        return self.__repr__()
 
     def copy(self, other: "DataWrapper") -> "DataWrapper":
         """
@@ -115,3 +114,8 @@ class DataWrapper:
         if self.quant_val is None:
             return x
         return x.div(self.quant_val).log2().round().exp2().mul(self.quant_val)
+
+    def __add__(self,other):
+        return self.value+other.value
+    def __sub__(self,other):
+        return self.value-other.value
