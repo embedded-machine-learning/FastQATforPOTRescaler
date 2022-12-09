@@ -154,6 +154,8 @@ class ConvBnA(nn.Module):
         else:
             self.activation = activation(*activation_args, **activation_kargs)
 
+        self.bias = self.bn.bias
+
     def int_extract(
         self, accumulation_type=torch.int32, small_signed_type=torch.int8, small_unsigned_type=torch.uint8
     ) -> ConvBnA_int:
@@ -178,8 +180,9 @@ class ConvBnA(nn.Module):
     @logger_forward
     def forward(self, x: DataWrapper) -> DataWrapper:
 
+        self.bn.pre_forward(self.conv)
         fact = self.bn.get_weight_factor()
         x = self.conv(x, fact)
-        x = self.bn(x, self.activation)
+        x = self.bn(x, self.activation,conv=self.conv)
 
         return x

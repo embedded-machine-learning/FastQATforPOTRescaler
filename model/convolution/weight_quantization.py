@@ -4,9 +4,13 @@ from typing import Tuple
 import torch
 from torch.nn.common_types import Tensor
 
+import numpy as np
+
 from ..Quantizer import Quant,FakeQuant
 from ..logger import logger_forward,logger_init
+from .. import __TESTING_FLAGS__
 
+NAME_INDEX = 0
 
 class LinQuantWeight(Quant):
     """
@@ -48,6 +52,11 @@ class LinQuantWeight(Quant):
         self.register_buffer("max", torch.tensor(2 ** (self.bits - 1) - 1))
         self.register_buffer("min", torch.tensor(-(2 ** (self.bits - 1) - 1)))
 
+        global NAME_INDEX
+        self.NAME_INDEX = NAME_INDEX
+        NAME_INDEX += 1
+        self.FILE_NAME = './conv_quant_values/' + str(self.NAME_INDEX)
+
     @logger_forward
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
         """
@@ -67,11 +76,15 @@ class LinQuantWeight(Quant):
         :rtype: tuple[Tensor,Tensor]
         """
         with torch.no_grad():
-            abs_value = self.get_abs(x * (rexp_diff.view(*self.rexp_view)))
+            if not __TESTING_FLAGS__['FREEZE_WEIGHT_QUANT']:
+                abs_value = self.get_abs(x * (rexp_diff.view(*self.rexp_view)))
+                self.abs = abs_value.detach()
 
-            self.abs = abs_value.detach()
-            self.delta_in = self.abs.mul(self.delta_in_factor).detach()
-            self.delta_out = self.abs.mul(self.delta_out_factor).detach()
+                self.delta_in = self.abs.mul(self.delta_in_factor).detach()
+                self.delta_out = self.abs.mul(self.delta_out_factor).detach()
+                
+            # with open(self.FILE_NAME + '_delta_in.csv', 'a+') as f:
+            #     np.savetxt(f, self.delta_in.detach().cpu().numpy().reshape(1,-1))
 
             fact = fact_fun(self.delta_out * rexp_mean).view(-1, 1, 1, 1)
 
@@ -84,6 +97,7 @@ class LinQuantWeight(Quant):
                 min_quant=self.min,
                 max_quant=self.max,
                 rounding_mode=self.rounding_mode,
+                random=False,
             ),
             fact,
         )
