@@ -141,6 +141,9 @@ class ConvBn(nn.Module):
             out_quant_args=out_quant_args,
             out_quant_kargs=out_quant_kargs,
         )
+        # sequential assignment 
+        self.__setattr__('0',self.conv)
+        self.__setattr__('1',self.bn)
 
     def int_extract(
         self, accumulation_type=torch.int32, small_signed_type=torch.int8, small_unsigned_type=torch.uint8

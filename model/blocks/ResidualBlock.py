@@ -96,9 +96,7 @@ class ResidualBlock(nn.Module):
         self.stride = stride
         self.add = add(planes)
         self.act3 = act(planes, {"use_enforced_quant_level": True})
-        if self.downsample is not None:
-            raise NotImplementedError("This feature has not been implemented yet")
-
+        
     def int_extract(self, type_small=torch.int8, type_big=torch.int32) -> ResidualBlock_int:
         assert self.downsample is None
         return ResidualBlock_int(
@@ -142,7 +140,7 @@ class ResidualBlock(nn.Module):
     @logger_forward
     def forward(self, x: DataWrapper) -> DataWrapper:
         x.set_quant()
-        bypass = x.clone()
+        # bypass = x.clone()
 
         fact1 = self.bn1.get_weight_factor()
         out = self.conv1(x, fact1)
@@ -153,8 +151,8 @@ class ResidualBlock(nn.Module):
         out = self.bn2(out, self.act2)
 
         if self.downsample is not None:
-            bypass = self.downsample(bypass)
+            x = self.downsample(x)
 
-        out = self.add(out, bypass, self.act3)
+        out = self.add(out, x, self.act3)
 
         return out
