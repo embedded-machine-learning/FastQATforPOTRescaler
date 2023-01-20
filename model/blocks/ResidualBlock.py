@@ -91,7 +91,7 @@ class ResidualBlock(nn.Module):
         self.act1 = act(planes)
         self.conv2 = conv3x3(planes, planes)
         self.bn2 = norm_layer(planes)
-        self.act2 = act(planes, {"use_enforced_quant_level": True})
+        self.act2 = act(planes, {"use_enforced_quant_level": (downsample is None)})
         self.downsample = downsample
         self.stride = stride
         self.add = add(planes)
@@ -139,9 +139,10 @@ class ResidualBlock(nn.Module):
 
     @logger_forward
     def forward(self, x: DataWrapper) -> DataWrapper:
-        x.set_quant()
+        if self.downsample is None:
+            x.set_quant()
         # bypass = x.clone()
-
+        out : DataWrapper 
         fact1 = self.bn1.get_weight_factor()
         out = self.conv1(x, fact1)
         out = self.bn1(out, self.act1)
@@ -150,8 +151,14 @@ class ResidualBlock(nn.Module):
         out = self.conv2(out, fact2)
         out = self.bn2(out, self.act2)
 
+
         if self.downsample is not None:
+            out.set_quant()
+            x.set_quant(out)
+            print('ds: ', x.shape)
             x = self.downsample(x)
+            print('ds: ', x.shape)
+            print("downsample used")
 
         out = self.add(out, x, self.act3)
 

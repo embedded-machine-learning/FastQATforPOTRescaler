@@ -25,6 +25,7 @@ class DataWrapper:
         self.rexp = rexp
         self.quant_val = None
         self.optimal_type = None
+        self.shape = value.shape
 
     def __repr__(self) -> str:
         return f"value shape:{self.value.shape}, rexp shape:{self.rexp.shape}, optimal_type:{self.optimal_type}, quant_fnc:{self.quant_val}"
@@ -113,6 +114,7 @@ class DataWrapper:
         """
         if self.quant_val is None:
             return x
+        print(x.shape,self.quant_val.shape)
         return x.div(self.quant_val).log2().round().exp2().mul(self.quant_val)
 
     def __add__(self,other):

@@ -32,6 +32,7 @@ def Downsample_Block(inplanes, planes, expansion, stride):
         out_channels=planes * expansion,
         kernel_size=1,
         stride=stride,
+        out_quant_kargs={"use_enforced_quant_level": True},
     )
 
 def LinearHelper(in_features,out_features):

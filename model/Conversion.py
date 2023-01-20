@@ -119,6 +119,24 @@ class Start(nn.Module):
                         rang = self.in_max
                     self.delta_in = rang / (2.0 ** (-self.run) - 1)
                     self.delta_out = rang / (2.0 ** (-self.run) - 1)
+            elif self.in_min>self.in_max: 
+                print("running undefined Start block using expensive computation at runtime")
+                x_min = x.min()
+                x_max = x.max()
+                rang = 2 * (torch.max(torch.abs(x_min), torch.abs(x_max)))
+                delta_in = rang / (2.0 ** (-self.run) - 1)
+                return DataWrapper(
+                    FakeQuant(
+                        x.clone(),
+                        delta_in,
+                        delta_in,
+                        self.training,
+                        x_min,
+                        x_max,
+                        "floor",
+                    ),
+                    torch.log2(delta_in),
+                )
                 
         return DataWrapper(
             FakeQuant(
