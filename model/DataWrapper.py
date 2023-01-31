@@ -1,6 +1,6 @@
 # Generic Type imports
 from typing import Optional, Tuple, Union, Any
-
+import copy
 # Torch imports
 import torch
 from torch.nn.common_types import Tensor
@@ -42,7 +42,7 @@ class DataWrapper:
         :rtype: DataWrapper
         """
         for key in self.to_copy:
-            setattr(self, key, getattr(other, key))
+            setattr(self, key, copy.deepcopy(getattr(other, key)))
         return self
 
     def clone(self) -> "DataWrapper":
@@ -116,8 +116,3 @@ class DataWrapper:
             return x
         print(x.shape,self.quant_val.shape)
         return x.div(self.quant_val).log2().round().exp2().mul(self.quant_val)
-
-    def __add__(self,other):
-        return self.value+other.value
-    def __sub__(self,other):
-        return self.value-other.value

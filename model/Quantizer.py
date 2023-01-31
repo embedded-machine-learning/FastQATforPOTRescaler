@@ -122,19 +122,19 @@ class Quant(nn.Module):
         self.register_buffer("max", torch.ones(self.size) * (2 ** (self.bits - 1) - 1))
         self.register_buffer("min", torch.ones(self.size) * (-(2 ** (self.bits - 1))))
 
-    @logger_forward
-    def copy(self, other: "Quant"):
-        """
-        copy copies the internal content from other to self
+    # @logger_forward
+    # def copy(self, other: "Quant"):
+    #     """
+    #     copy copies the internal content from other to self
 
-        :param other: Another Quant object
-        :type other: Quant
-        """
-        self.delta_in = other.delta_in.clone().detach()
-        self.delta_out = other.delta_out.clone().detach()
-        self.min = other.min.clone().detach()
-        self.max = other.max.clone().detach()
-        self.rounding_mode = other.rounding_mode
+    #     :param other: Another Quant object
+    #     :type other: Quant
+    #     """
+    #     self.delta_in = other.delta_in.clone().detach()
+    #     self.delta_out = other.delta_out.clone().detach()
+    #     self.min = other.min.clone().detach()
+    #     self.max = other.max.clone().detach()
+    #     self.rounding_mode = other.rounding_mode
 
     @logger_forward
     def use_quant(self, metadata: DataWrapper):

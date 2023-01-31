@@ -11,7 +11,7 @@ logger = log_class(LOGGER_FIILE_PATH)
 
 logger_forward = logger.log(
     {
-        " = "      : print_left_of("="),
+        " = "    : print_left_of("="),
         " elif"  : print_between("elif", ":", pre=True, additional_indent= 1),                                  
         " if"    : print_between("if", ":"),
         " else"  : print_custom("else Taken", pre=True, additional_indent= 1),
