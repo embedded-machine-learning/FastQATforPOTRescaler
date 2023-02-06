@@ -64,17 +64,32 @@ class Start(nn.Module):
         """
         super(Start, self).__init__()
         self.size = size
-        self.register_buffer("run", (-bits) * torch.ones(size, dtype=torch.float))
-        self.register_buffer("delta_in", torch.clone((1.0 / (2.0 ** (-self.run) - 1))).detach())
-        self.register_buffer("delta_out", torch.clone((1.0 / (2.0 ** (-self.run) - 1))).detach())
-        self.register_buffer("max", 2 ** (-self.run - 1) - 1)
-        self.register_buffer("min", -(2 ** (-self.run - 1)))
+        self.register_buffer(
+            "bits", (bits) * torch.ones(size, dtype=torch.float))
+        self.register_buffer("delta_in", torch.clone(
+            (1.0 / (2.0 ** (self.bits) - 1))).detach())
+        self.register_buffer("delta_out", torch.clone(
+            (1.0 / (2.0 ** (self.bits) - 1))).detach())
+        self.register_buffer("max", 2 ** (-self.bits - 1) - 1)
+        self.register_buffer("min", -(2 ** (-self.bits - 1)))
+
+        self.only_positive = False
 
         self.mode = mode
         self.auto_runs = auto_runs
         self.last_run_train = True
         self.register_buffer("in_max", torch.Tensor([-10000.0]))
         self.register_buffer("in_min", torch.Tensor([10000.0]))
+
+    def _out_pure_positive(self):
+        self.min = torch.zeros_like(self.min)
+        self.max = 2 ** (self.bits) - 1
+        self.only_positive = True
+
+    def _out_pos_and_neg(self):
+        self.min = - (2 ** (self.bits - 1))
+        self.max = 2 ** (self.bits - 1) - 1
+        self.only_positive = False
 
     def int_extract(
         self, accumulation_type=torch.int32, small_signed_type=torch.int8, small_unsigned_type=torch.uint8
@@ -87,12 +102,13 @@ class Start(nn.Module):
             small_signed_type=small_signed_type,
             small_unsigned_type=small_unsigned_type,
         )
-    
+
     def train(self, mode: bool = True):
         if mode == False and self.last_run_train and self.auto_runs > 0:
             self.last_run_train = False
             self.auto_runs -= 1
-            print("reduce autorun by 1:",self.auto_runs,'min/max',self.in_min,'/',self.in_max)
+            print("reduce autorun by 1:", self.auto_runs,
+                  'min/max', self.in_min, '/', self.in_max)
         return super().train(mode)
 
     @logger_forward
@@ -106,25 +122,31 @@ class Start(nn.Module):
 
                     if torch.all(tmp_in_min == 0) and torch.all(tmp_in_max == 0):
                         print('error state detected')
-                        self.auto_runs +=2
+                        self.auto_runs += 2
                         tmp_in_min = tmp_in_min-1
                         tmp_in_max = tmp_in_max+1
-                        rang = 2 * (torch.max(torch.abs(tmp_in_min), torch.abs(tmp_in_max)))
+                        rang = 2 * \
+                            (torch.max(torch.abs(tmp_in_min), torch.abs(tmp_in_max)))
                     else:
                         self.in_min = tmp_in_min
                         self.in_max = tmp_in_max
-                        rang = 2 * (torch.max(torch.abs(self.in_min), torch.abs(self.in_max)))
-                    
-                    if self.in_min == 0 and self.in_max>0:
+                        rang = 2 * \
+                            (torch.max(torch.abs(self.in_min), torch.abs(self.in_max)))
+
+                    if self.in_min >= 0 and self.in_max > 0:
                         rang = self.in_max
-                    self.delta_in = rang / (2.0 ** (-self.run) - 1)
-                    self.delta_out = rang / (2.0 ** (-self.run) - 1)
-            elif self.in_min>self.in_max: 
-                print("running undefined Start block using expensive computation at runtime")
+                        self._out_pure_positive()
+                    else:
+                        self._out_pos_and_neg()
+                    self.delta_in = rang / (2.0 ** (self.bits) - 1)
+                    self.delta_out = rang / (2.0 ** (self.bits) - 1)
+            elif self.in_min > self.in_max:
+                print(
+                    "running undefined Start block using expensive computation at runtime")
                 x_min = x.min()
                 x_max = x.max()
                 rang = 2 * (torch.max(torch.abs(x_min), torch.abs(x_max)))
-                delta_in = rang / (2.0 ** (-self.run) - 1)
+                delta_in = rang / (2.0 ** (self.bits) - 1)
                 return DataWrapper(
                     FakeQuant(
                         x.clone(),
@@ -133,20 +155,21 @@ class Start(nn.Module):
                         self.training,
                         x_min,
                         x_max,
-                        "floor",
+                        'floor',
                     ),
                     torch.log2(delta_in),
                 )
-                
+
         return DataWrapper(
             FakeQuant(
-                x.clone(),
-                self.delta_in,
-                self.delta_out,
-                self.training,
-                self.min,
-                self.max,
-                "floor",
+                x = x.clone(),
+                delta_in = self.delta_in,
+                delta_out = self.delta_out,
+                training = self.training,
+                min_quant =  self.min,
+                max_quant = self.max,
+                rounding_mode = 'floor',
+                clamp = True,
             ),
             torch.log2(self.delta_out),
         )
@@ -180,7 +203,8 @@ class Stop(nn.Module):
         super(Stop, self).__init__()
         self.size = size
         self.register_buffer("exp", torch.zeros(self.size))
-        self.register_buffer("for_dtype", torch.zeros(1))  # Only required to know the current datatype
+        # Only required to know the current datatype
+        self.register_buffer("for_dtype", torch.zeros(1))
 
     def int_extract(self, accumulation_type=torch.int32, small_signed_type=torch.int8, small_unsigned_type=torch.uint8) -> Stop_int:
         return Stop_int(self.exp)

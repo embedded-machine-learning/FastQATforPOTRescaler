@@ -236,8 +236,8 @@ def test_forward():
 ########################### LinQuantExpScale #############################
 ##########################################################################
 
-
-LIN_DUT = LinQuantExpScale(bits,size,rounding_mode,use_enforced_quant_level)
+mom = 1
+LIN_DUT = LinQuantExpScale(bits,size,rounding_mode,use_enforced_quant_level,mom1=mom)
 
 
 def test_LIN_init():
@@ -252,6 +252,7 @@ def test_LIN_init():
     assert (LIN_DUT.max == torch.ones(size)*((2**(bits-1)-1))).all()
     assert LIN_DUT.permute_list == tuple([1, 0, 2, 3])
     assert LIN_DUT.reduce_list == [0, 2, 3]
+    assert LIN_DUT.mom1 == mom
 
     assert LIN_DUT.delta_in_factor == 2/(2**bits-1)
     assert LIN_DUT.delta_out_factor == 2/(2**bits-1)
@@ -261,3 +262,9 @@ def test_LIN_init():
 def test_LIN_forward():
     x = torch.rand((10, 100, 12, 34))
     x_clone = x.clone()
+
+    ma = x.abs().amax(dim=0,keepdim=True).amax(dim=2,keepdim=True).amax(dim=3,keepdim=True)
+    delta = ma.log2().ceil().exp2().mul(2/(2**bits-1))
+    res = x.clone().div(delta).floor().clamp(LIN_DUT.min,LIN_DUT.max).mul(delta)
+    assert (LIN_DUT(x) == res).all()
+    assert id(LIN_DUT(x)) == id(x)

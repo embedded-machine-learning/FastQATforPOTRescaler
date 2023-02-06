@@ -127,10 +127,7 @@ def calculate_alpha(
     :rtype: torch.Tensor
     """
     with torch.no_grad():
-        n = weight.abs() * rexp.view(-1)
-        n = n.div_(out_quant).div_(torch.sqrt(var + 1e-5))
-        n = n.log2_()
-        # n = torch.log2(weight.abs() * rexp.view(-1) / (out_quant * torch.sqrt(var + 1e-5)))
+        n = torch.log2(weight.abs() / (out_quant * torch.sqrt(var + 1e-5))) + rexp.view(-1)
         nr = torch.ceil(n)
         alpha = torch.sign(weight) * torch.exp2(n - nr)
     return alpha
@@ -160,18 +157,10 @@ def calculate_alpha_fixed(
     :rtype: torch.Tensor
     """
     with torch.no_grad():
-        # n = torch.log2(weight.abs() / (out_quant * torch.sqrt(var + 1e-5))) + rexp.view(-1)
-        # nr = n.max() * torch.ones_like(n)
-        # nr = torch.ceil(nr)
-        # alpha = torch.sign(weight) * torch.exp2(n - nr)
-
-        n = weight.abs() * rexp.view(-1)
-        n = n.div_(out_quant).div_(torch.sqrt(var + 1e-5))
-        n = n.log2_()
-        # n = torch.log2(weight.abs() * rexp.view(-1) / (out_quant * torch.sqrt(var + 1e-5)))
+        n = torch.log2(weight.abs() / (out_quant * torch.sqrt(var + 1e-5))) + rexp.view(-1)
         nr = n.median() * torch.ones_like(n)
         nr = torch.ceil(nr)
         alpha = torch.sign(weight) * torch.exp2(n - nr)
-    # raise NotImplementedError()
+
     return alpha
 

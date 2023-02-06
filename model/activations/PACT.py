@@ -29,7 +29,6 @@ class PACT(Quant):
         self.register_buffer("delta_out_factor", torch.tensor(1.0 / (2.0**self.bits - 1)))
 
         self.register_parameter("alpha", torch.nn.Parameter(6 * torch.ones(size)))
-        self.register_buffer("alpha_used", torch.zeros_like(self.alpha))
 
         nn.init.constant_(self.min, 0)
         nn.init.constant_(self.max, 2**bits - 1)
@@ -40,19 +39,19 @@ class PACT(Quant):
     def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None):
         if self.training:
             with torch.no_grad():
-
-                self.alpha_used = self.alpha.clone()  # block 2 small and negative alpha
-                self.alpha_used = self.alpha_used.clamp(min=1e-3)  # block 2 small and negative alpha
+                self.alpha : torch.nn.Parameter     # just to get auto complete
+                self.alpha.data.clamp_(min=1e-3)    # block 2 small and negative alpha
+                
                 # abs = self.alpha_used.log2().ceil().exp2()
-                self.delta_in = self.alpha_used.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
-                self.delta_out = self.alpha_used.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
+                self.delta_in = self.alpha.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
+                self.delta_out = self.alpha.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
                 if self.use_enforced_quant_level and metadata is not None:
                     self.use_quant(metadata)
                 if self.use_enforced_quant_level and metadata is None:
                     raise ValueError("Quantization function desired but metadata not passed")
                 
 
-                self.max = self.alpha.div(self.delta_in, rounding_mode=self.rounding_mode).clamp(self.min,self.max_helper)
+                self.max = self.alpha.div(self.delta_in).round().clamp(self.min,self.max_helper)
 
             x = PACT_back_function.apply(x, self.alpha)
         return super(PACT,self).forward(x, fake)
@@ -62,11 +61,11 @@ class PACT_back_function(torch.autograd.Function):
     @staticmethod
     def forward(ctx, val: Tensor, alpha: Tensor) -> Tensor:
         ctx.save_for_backward(val >= alpha, val > 0)
-        return val
+        return val.clone()
 
     @staticmethod
     def backward(ctx, grad_outputs: Tensor) -> Tuple[Tensor, Tensor]:
         alpha_cmp, zero_cmp = ctx.saved_tensors
-        val_gard = grad_outputs * zero_cmp * (~alpha_cmp)
-        alpha_grad = grad_outputs * alpha_cmp * zero_cmp
+        val_gard = grad_outputs * torch.logical_and(zero_cmp,~alpha_cmp)
+        alpha_grad = grad_outputs * alpha_cmp
         return val_gard, alpha_grad

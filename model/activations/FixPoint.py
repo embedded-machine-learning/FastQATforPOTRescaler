@@ -23,6 +23,7 @@ class FixPoint(Quant):
         self.take_new = True
         self.fixpoint = fixpoint
         assert self.bits > 0
+        assert use_enforced_quant_level == False
         # as defined by f8net
         
 
@@ -37,7 +38,7 @@ class FixPoint(Quant):
         self.register_buffer('max_float',self.max*2**(-fixpoint))
 
     def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None):
-        if self.training:
+        if self.training and fake:
             x = x.clamp(self.min_float,self.max_float)
 
         return super(FixPoint,self).forward(x, fake)
