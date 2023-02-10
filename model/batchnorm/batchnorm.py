@@ -141,7 +141,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         x, rexp = input.get()
 
         if activation != None:
-            self.out_quant.copy(activation)
+            self.out_quant=activation
             quant = activation
         else:
             quant = self.out_quant
@@ -157,18 +157,18 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         x, rexp = input.get()
 
         if activation != None:
-            self.out_quant.copy(activation)
+            self.out_quant=activation
             quant = activation
         else:
             quant = self.out_quant
 
         with torch.no_grad():
             self.n = self.func_n(
-                weight=torch.abs(self.weight.view(-1)),
+                weight=self.weight.view(-1),
                 bias=self.bias.view(-1),
                 mean=self.running_mean.view(-1),
                 var=self.running_var.view(-1),
-                out_quant=quant.delta_in.view(-1),
+                out_quant=quant.delta_out.view(-1),
                 rexp=rexp.view(-1),
             ).detach().view(1, -1, 1, 1)
 
@@ -177,16 +177,24 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                 bias=self.bias.view(-1),
                 mean=self.running_mean.view(-1),
                 var=self.running_var.view(-1),
-                out_quant=quant.delta_in.view(-1),
+                out_quant=quant.delta_out.view(-1),
                 rexp=rexp.view(-1),
                 n=self.n.view(-1),
             ).detach()
 
-            tmp = torch.exp2(self.n.view(1, -1, 1, 1))
+            # tmp = torch.exp2(self.n.view(1, -1, 1, 1))
 
-            self.t = t.view(1, -1, 1, 1).div(tmp).floor()
+            def mul_pow2(a:torch.Tensor,exp:torch.Tensor):
+                mantissa, exponent = torch.frexp(a)
+                exponent += exp.type(torch.int)
+                return torch.ldexp(mantissa,exponent)
+
+
+            # self.t = (t.view(1, -1, 1, 1)).div(tmp).floor()
+            self.t = mul_pow2(t.view(1,-1,1,1),-self.n.view(1,-1,1,1))
             x = x + self.t
-            x = x.mul(tmp.view(1, -1, 1, 1))
+            x = mul_pow2(x,self.n.view(1,-1,1,1))
+            # x = x.mul(tmp)
 
             x = x.floor()
             x = x.clamp(quant.min, quant.max)

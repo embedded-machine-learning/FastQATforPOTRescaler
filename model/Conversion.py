@@ -84,11 +84,15 @@ class Start(nn.Module):
     def _out_pure_positive(self):
         self.min = torch.zeros_like(self.min)
         self.max = 2 ** (self.bits) - 1
+        if self.only_positive == False:
+            print("switching input to only positive values")
         self.only_positive = True
 
     def _out_pos_and_neg(self):
         self.min = - (2 ** (self.bits - 1))
         self.max = 2 ** (self.bits - 1) - 1
+        if self.only_positive == True:
+            print("switching input to mixed values")
         self.only_positive = False
 
     def int_extract(
@@ -138,8 +142,13 @@ class Start(nn.Module):
                         self._out_pure_positive()
                     else:
                         self._out_pos_and_neg()
-                    self.delta_in = rang / (2.0 ** (self.bits) - 1)
-                    self.delta_out = rang / (2.0 ** (self.bits) - 1)
+
+                    tmp = rang / (2.0 ** (self.bits) - 1)
+                    tmp = torch.exp2(torch.log2(tmp))
+                    self.delta_in = tmp
+                    self.delta_out = tmp
+                    # self.delta_in = rang / (2.0 ** (self.bits) - 1)
+                    # self.delta_out = rang / (2.0 ** (self.bits) - 1)
             elif self.in_min > self.in_max:
                 print(
                     "running undefined Start block using expensive computation at runtime")
@@ -217,5 +226,5 @@ class Stop(nn.Module):
             if not self.training:
                 shape = [1 for _ in range(len(x.shape))]
                 shape[1] = -1
-                x = x.to(self.for_dtype.dtype).mul_(rexp.exp2().view(*shape))
+                x = x.to(self.for_dtype.dtype).mul(rexp.exp2().view(*shape))
         return x

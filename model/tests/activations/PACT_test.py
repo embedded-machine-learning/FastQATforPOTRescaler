@@ -7,7 +7,7 @@ def unit(un:PACT,gen_size, size,bits):
     x = torch.rand(gen_size)
     alpha = un.alpha.clone()
 
-    delta = alpha*(1/(2**bits-1))
+    delta = (alpha*(1/(2**bits-1))).log2().exp2()
     res = x.clone().div(delta).floor().clamp(0,2**bits-1).mul(delta)
 
     out = un(x)   # just run once
