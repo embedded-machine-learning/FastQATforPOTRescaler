@@ -31,7 +31,7 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
             self.delta_in = sigma.mul_(self.delta_in_factor)  # delta in and delta out identical
             self.delta_out.data = self.delta_in
 
-            fact = fact_fun(self.delta_out * rexp_mean.view(-1,1,1,1)).view(-1, 1, 1, 1)
+            fact = fact_fun((self.delta_out.view(1,-1,1,1) * rexp_mean).log2()).view(-1, 1, 1, 1)
 
             delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
 

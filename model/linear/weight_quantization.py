@@ -75,7 +75,7 @@ class LinQuantWeight(Quant):
             self.delta_in = self.abs.mul(self.delta_in_factor).detach()
             self.delta_out = self.abs.mul(self.delta_out_factor).detach()
 
-            fact = fact_fun(self.delta_out * rexp_mean).view(-1, 1)
+            fact = fact_fun((self.delta_out.view(1,-1) * rexp_mean).log2()).view(-1, 1)
 
         return (
             FakeQuant(

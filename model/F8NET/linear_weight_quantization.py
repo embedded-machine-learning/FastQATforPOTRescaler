@@ -29,7 +29,7 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
             self.delta_in = sigma.mul(self.delta_in_factor)
             self.delta_out = sigma.mul(self.delta_in_factor)
 
-            fact = fact_fun(self.delta_out * rexp_mean).view(-1, 1)
+            fact = fact_fun((self.delta_out.view(1,-1) * rexp_mean).log2()).view(-1, 1)
 
         return (
             FakeQuant(

@@ -25,7 +25,7 @@ class LinQuantWeight(Quant):
     :type rounding_mode: str, optional
     """
     @logger_init
-    def __init__(self, bits: int = 8, size: tuple = (-1,), rounding_mode: str = "trunc", layer_wise=False) -> None:
+    def __init__(self, bits: int = 8, size: tuple = (-1,), rounding_mode: str = "round", layer_wise=False) -> None:
         """
         Please see class documentation `LinQuantWeight`
         """
@@ -42,21 +42,21 @@ class LinQuantWeight(Quant):
        
 
         assert self.bits > 0
-        self.register_buffer("delta_in_factor", torch.tensor(2.0 / (2.0**self.bits)))
-        self.register_buffer("delta_out_factor", torch.tensor(2.0 / (2.0**self.bits - 2)))
+        self.register_buffer("delta_in_factor", torch.tensor(2.0 / (2.0**self.bits - 1)))
+        self.register_buffer("delta_out_factor", torch.tensor(2.0 / (2.0**self.bits - 1)))
 
         self.register_buffer("max", torch.tensor(2 ** (self.bits - 1) - 1))
-        self.register_buffer("min", torch.tensor(-(2 ** (self.bits - 1) - 1)))
+        self.register_buffer("min", torch.tensor(-(2 ** (self.bits - 1))))
 
     @logger_forward
-    def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
+    def forward(self, weight: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
         """
         forward Does the quantization, if :cvar:`self.training` returns floats else ints
 
         Calculates the quantization factors and a scaling factor defined by the passed function.
 
-        :param x: The weights to quantize
-        :type x: Tensor
+        :param weight: The weights to quantize
+        :type weight: Tensor
         :param rexp_mean: Mean of the exponent
         :type rexp_mean: Tensor
         :param rexp_diff: Difference of the individual exponents compared to the mean
@@ -67,17 +67,17 @@ class LinQuantWeight(Quant):
         :rtype: tuple[Tensor,Tensor]
         """
         with torch.no_grad():
-            abs_value = self.get_abs(x * (rexp_diff.view(*self.rexp_view)))
+            abs_value = self.get_abs(weight * (rexp_diff.view(*self.rexp_view)))
 
             self.abs = abs_value.detach()
             self.delta_in = self.abs.mul(self.delta_in_factor).detach()
             self.delta_out = self.abs.mul(self.delta_out_factor).detach()
 
-            fact = fact_fun(self.delta_out * rexp_mean).view(-1, 1, 1, 1)
+            fact = fact_fun((self.delta_out.view(1, -1, 1, 1) * rexp_mean).log2()).view(-1, 1, 1, 1)
 
         return (
             FakeQuant(
-                x=x.clone(),
+                x=weight.clone(),
                 delta_in=self.delta_in / ((rexp_diff.view(*self.rexp_view) * fact)),
                 delta_out=self.delta_out / ((rexp_diff.view(*self.rexp_view) * fact)),
                 training=self.training,

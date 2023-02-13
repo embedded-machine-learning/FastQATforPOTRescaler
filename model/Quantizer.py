@@ -64,6 +64,7 @@ def FakeQuant(
             x.data.trunc_()
         else:#rounding_mode=='round':
             x.data.round_()
+            # x.data = (x.data + torch.rand_like(x.data)).floor()
         if clamp:
             x.data.clamp_(min_quant, max_quant)
         

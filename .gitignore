@@ -27,3 +27,5 @@ loadconversion.py
 loadtest.py
 *.pt
 .VSCodeCounter/*
+
+*.coverage

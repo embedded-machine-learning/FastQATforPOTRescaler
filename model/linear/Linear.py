@@ -13,6 +13,7 @@ from ..logger import logger_forward, logger_init
 from ..Quantizer import LinQuantExpScale, FakeQuant
 from ..DataWrapper import DataWrapper
 from .. import __DEBUG__
+from ..utils import DownScaler
 
 from .weight_quantization import LinQuantWeight
 
@@ -78,8 +79,8 @@ class Linear(nn.Linear):
         if weight_quant_args == None:
             weight_quant_args = (
                 weight_quant_bits,
-                1 if not weight_quant_channel_wise else (out_features, 1),
-                "trunc",
+                (-1,) if not weight_quant_channel_wise else (out_features, 1),
+                "round",
             )
 
         if weight_quant == None:
@@ -87,159 +88,104 @@ class Linear(nn.Linear):
         else:
             self.weight_quant = weight_quant
 
+        self.register_buffer("quant_weight", torch.zeros_like(self.weight))
         # only used if factor_fun in forward is None
         if out_quant_args == None:
             out_quant_args = (
                 8,
                 (1, out_features),
+                'floor'
             )
 
-        if out_quant == None:
-            self.out_quant = LinQuantExpScale(*out_quant_args, **out_quant_kargs)
-        else:
-            self.out_quant = out_quant(*out_quant_args, **out_quant_kargs)
+        self.down_scaler = DownScaler((1,out_features),out_quant=out_quant,out_quant_args=out_quant_args,out_quant_kargs=out_quant_kargs)
 
-        self.register_buffer("quant_weight", torch.zeros_like(self.weight))
-        self.register_buffer("n", torch.zeros(((1, out_features))))
-        if bias:
-            self.register_buffer("t", torch.zeros((1, out_features)))
-        else:
-            self.t = None
+        self.test = {}
 
-    def int_extract(self, accumulation_type = torch.int32, small_signed_type = torch.int8, small_unsigned_type=torch.uint8) -> Linear_int:
-        return Linear_int(
-            self.in_features,
-            self.out_features,
-            self.quant_weight,
-            self.n,
-            self.t if self.bias is not None else None,
-            self.out_quant.min,
-            self.out_quant.max,
-            accumulation_type = accumulation_type,
-            small_signed_type = small_signed_type,
-            small_unsigned_type = small_unsigned_type,
-        )
+        
+    # def int_extract(self, accumulation_type = torch.int32, small_signed_type = torch.int8, small_unsigned_type=torch.uint8) -> Linear_int:
+    #     return Linear_int(
+    #         self.in_features,
+    #         self.out_features,
+    #         self.quant_weight,
+    #         self.n,
+    #         self.t if self.bias is not None else None,
+    #         self.out_quant.min,
+    #         self.out_quant.max,
+    #         accumulation_type = accumulation_type,
+    #         small_signed_type = small_signed_type,
+    #         small_unsigned_type = small_unsigned_type,
+    #     )
+
 
     @logger_forward
-    def get_weight_factor(self, delta_O: Tensor):
-        """
-        get_weight_factor returns a calculation function for the weight scaling
-
-        :param delta_O: Output quantization factor
-        :type delta_O: Tensor
-        """
-
-        def fun(rexp):
-            with torch.no_grad():
-                n = rexp.view(-1) / delta_O.view(-1)
-                n = torch.log2(n)
-                nr = torch.ceil(n)
-                return torch.exp2(n - nr)
-
-        return fun
-
-    @logger_forward
-    def calculate_n(self, delta_W: Tensor, delta_I: Tensor, delta_O: Tensor) -> Tensor:
-        """
-        calculate_n calculates the scaling shift
-
-        :param delta_W: Weight scaling factor
-        :type delta_W: Tensor
-        :param delta_I: Input scaling factor
-        :type delta_I: Tensor
-        :param delta_O: Output scaling factor
-        :type delta_O: Tensor
-        :return: The shift value
-        :rtype: Tensor
-        """
-        with torch.no_grad():
-            n = delta_W.view(-1) * delta_I.view(-1) / delta_O.view(-1)
-            n = torch.log2(n)
-            if __DEBUG__:
-                self.debug_n = n.clone()
-            nr = torch.ceil(n)
-        return nr
-
-    @logger_forward
-    def forward(self, invals: DataWrapper, factor_fun: FunctionType = None) -> torch.Tensor:
+    def forward(self, input: DataWrapper, factor_fun: FunctionType = None) -> torch.Tensor:
         """
         forward Computes the Linear layer with quantization
 
         **IMPORTANT** Acts as an independent class if no function is passed to the forward method (if independent it quantizes the output by shifting)
 
-        :param invals: The values of the previous layer
-        :type invals: Tuple[torch.Tensor, torch.Tensor]
+        :param input: The values of the previous layer
+        :type input: Tuple[torch.Tensor, torch.Tensor]
         :param factor_fun: A function for additional weight scaling , defaults to None
         :type factor_fun: FunctionType, optional
         :return: Returns the computed values and the exponents
         :rtype: Tuple[torch.Tensor, torch.Tensor]
         """
-        x, rexp = invals.get()
-
-        rexp_mean = (torch.mean(rexp)).squeeze()
-        rexp_diff = rexp.squeeze() - rexp_mean.unsqueeze(-1)
-
-        weight = self.weight
-
         if factor_fun == None:
-            weight, fact = self.weight_quant(
-                weight,
-                rexp_mean.exp2(),
-                rexp_diff.exp2(),
-                self.get_weight_factor(self.out_quant.delta_in.view(-1).detach()),
-            )
+            return self.forward_stand_alone(input)
         else:
-            weight, fact = self.weight_quant(
-                weight,
-                rexp_mean.exp2(),
-                rexp_diff.exp2(),
-                factor_fun,
-            )
+            return self.forward_integrated(input, factor_fun)
 
-        # weight = weight.type(self.weight.dtype)
-        # fact = fact.type(self.weight.dtype)
 
-        if self.bias == None:
+    @logger_forward
+    def forward_stand_alone(self, input: DataWrapper) -> torch.Tensor:
+        value, rexp = input.get()
+
+        rexp_mean = torch.mean(rexp)
+        rexp_diff = rexp - rexp_mean
+        
+        weight_function = self.down_scaler.get_weight_function()
+
+        weight, fact = self.weight_quant(
+            self.weight,
+            rexp_mean.exp2(),
+            rexp_diff.exp2(),
+            weight_function,
+        )
+
+        self.test['weight'] = weight
+        
+        if not self.training:
+            self.quant_weight = weight.detach().clone()
+
+        out = F.linear(value, weight, None)
+
+        if self.bias is not None:
+            bias = self.bias.view(1,-1,1,1)
+        else:
             bias = None
-        else:
-            bias = FakeQuant(
-                x=self.bias.clone().view(1, -1),
-                delta_in=self.weight_quant.delta_out.view(-1).detach() * (rexp_mean.view(-1).detach().exp2())/fact.view(-1),
-                delta_out=self.weight_quant.delta_out.view(-1).detach() * (rexp_mean.view(-1).detach().exp2())/fact.view(-1),
-                training=self.training,
-                min_quant=-2**31,
-                max_quant=2**31 - 1,
-                rounding_mode="floor",
-            )
+
+        return self.down_scaler(input.set(out, rexp_mean + self.weight_quant.delta_out.log2().view(1, -1)),bias)
+        
+    @logger_forward
+    def forward_integrated(self, input: DataWrapper, factor_fun: FunctionType = None) -> torch.Tensor:
+        x, rexp = input.get()
+
+        rexp_mean = torch.mean(rexp)
+        rexp_diff = rexp - rexp_mean
+
+        weight, fact = self.weight_quant(
+            self.weight,
+            rexp_mean.exp2(),
+            rexp_diff.exp2(),
+            factor_fun,
+        )
+
+        self.test['weight'] = weight
 
         if not self.training:
-            if bias != None:
-                self.t = bias.detach().view(1, -1)
-            else:
-                self.t = None
-
             self.quant_weight = weight.detach().clone()
-            self.n = self.calculate_n(
-                self.weight_quant.delta_out.view(-1).detach(),
-                2 ** rexp_mean.view(-1).detach(),
-                self.out_quant.delta_in.view(-1).detach(),
-            ).view(1, -1)
+            
+        out = F.linear(x, weight, None)
 
-        # if self.training:
-        out = F.linear(x, weight, bias)
-        # else:
-        #     out = F.linear(x, weight, None)
-
-        if factor_fun == None:
-            if self.training:
-                out2 = self.out_quant(out)
-            else:
-                # if bias is not None:
-                #     out2 = (
-                #         out.mul(torch.exp2(self.n)).add_(self.t).clamp_(self.out_quant.min, self.out_quant.max).floor_()
-                #     )
-                # else:
-                out2 = out.mul(torch.exp2(self.n)).clamp_(self.out_quant.min, self.out_quant.max).floor_()
-            return invals.set(out2, torch.log2(self.out_quant.delta_out.detach()))
-        else:
-            return invals.set(out, rexp_mean + self.weight_quant.delta_out.log2().view(1, -1))
+        return input.set(out, rexp_mean + self.weight_quant.delta_out.log2().view(1, -1))
