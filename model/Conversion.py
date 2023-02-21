@@ -1,6 +1,5 @@
 # Generic Type imports
-from types import NoneType
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 
 # Torch imports
 import torch
@@ -57,7 +56,7 @@ class Start(nn.Module):
 
     @logger_init
     def __init__(
-        self, bits: int = 8, size: Tuple[int] = (1,), mode: Union[str, NoneType] = "auto", auto_runs: int = 2
+        self, bits: int = 8, size: Tuple[int] = (1,), mode: Optional[str] = "auto", auto_runs: int = 2
     ) -> None:
         """
         Please read Class help
