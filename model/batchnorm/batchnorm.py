@@ -191,7 +191,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
 
 
             # self.t = (t.view(1, -1, 1, 1)).div(tmp).floor()
-            self.t = mul_pow2(t.view(1,-1,1,1),-self.n.view(1,-1,1,1))
+            self.t = mul_pow2(t.view(1,-1,1,1),-self.n.view(1,-1,1,1)).floor()
             x = x + self.t
             x = mul_pow2(x,self.n.view(1,-1,1,1))
             # x = x.mul(tmp)
