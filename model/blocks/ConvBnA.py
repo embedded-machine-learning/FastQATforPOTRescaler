@@ -95,6 +95,7 @@ class ConvBnA(nn.Module):
         weight_quant_args=None,
         weight_quant_kargs={},
         # Batch-Norm
+        bn_class = None,
         eps: float = 1e-5,
         momentum: float = 0.1,
         affine: bool = True,
@@ -133,7 +134,11 @@ class ConvBnA(nn.Module):
             out_quant_args=None,
             out_quant_kargs={},
         )
-        self.bn = BatchNorm2d(
+
+        if bn_class==None:
+            bn_class=BatchNorm2d
+
+        self.bn = bn_class(
             num_features=out_channels,
             eps=eps,
             momentum=momentum,

@@ -48,6 +48,8 @@ class LinQuantWeight(Quant):
         self.register_buffer("max", torch.tensor(2 ** (self.bits - 1) - 1))
         self.register_buffer("min", torch.tensor(-(2 ** (self.bits - 1))))
 
+        self.delta_for_quant = None
+
     @logger_forward
     def forward(self, weight: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
         """
@@ -75,11 +77,13 @@ class LinQuantWeight(Quant):
 
             fact = fact_fun((self.delta_out.view(1, -1, 1, 1) * rexp_mean).log2()).view(-1, 1, 1, 1)
 
+            self.delta_for_quant = self.delta_in / ((rexp_diff.view(*self.rexp_view) * fact))
+
         return (
             FakeQuant(
                 x=weight.clone(),
-                delta_in=self.delta_in / ((rexp_diff.view(*self.rexp_view) * fact)),
-                delta_out=self.delta_out / ((rexp_diff.view(*self.rexp_view) * fact)),
+                delta_in=self.delta_for_quant,
+                delta_out=self.delta_for_quant,
                 training=self.training,
                 min_quant=self.min,
                 max_quant=self.max,

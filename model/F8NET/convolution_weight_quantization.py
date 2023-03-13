@@ -33,13 +33,13 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
 
             fact = fact_fun((self.delta_out.view(1,-1,1,1) * rexp_mean).log2()).view(-1, 1, 1, 1)
 
-            delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
+            self.delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
 
         return (
             FakeQuant(
                 x=x.clone(),
-                delta_in=delta_for_quant,
-                delta_out=delta_for_quant,
+                delta_in=self.delta_for_quant,
+                delta_out=self.delta_for_quant,
                 training=self.training,
                 min_quant=self.min,
                 max_quant=self.max,

@@ -45,8 +45,8 @@ class PACT(Quant):
                 # abs = self.alpha_used.log2().ceil().exp2()
                 # self.delta_in = self.alpha.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
                 # self.delta_out = self.alpha.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
-                self.delta_in = self.alpha.mul(self.delta_in_factor).detach().log2().exp2()  # .log2().ceil().exp2()
-                self.delta_out = self.alpha.mul(self.delta_out_factor).detach().log2().exp2()  # .log2().ceil().exp2()
+                self.delta_in = self.alpha.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
+                self.delta_out = self.alpha.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
                 if self.use_enforced_quant_level and metadata is not None:
                     self.use_quant(metadata)
                 if self.use_enforced_quant_level and metadata is None:

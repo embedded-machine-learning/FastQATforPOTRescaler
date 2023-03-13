@@ -26,12 +26,7 @@ class LinQuantWeight(Quant):
     :type rounding_mode: str, optional
     """
     @logger_init
-    def __init__(
-        self,
-        bits: int = 8,
-        size: tuple = (-1,),
-        rounding_mode: str = "trunc",
-    ) -> None:
+    def __init__(self, bits: int = 8, size: tuple = (-1,), rounding_mode: str = "round") -> None:
         """
         Please see class documentation `LinQuantWeight`
         """

@@ -86,7 +86,7 @@ class Linear(nn.Linear):
         if weight_quant == None:
             self.weight_quant = LinQuantWeight(*weight_quant_args, **weight_quant_kargs)
         else:
-            self.weight_quant = weight_quant
+            self.weight_quant = weight_quant(*weight_quant_args, **weight_quant_kargs)
 
         self.register_buffer("quant_weight", torch.zeros_like(self.weight))
         # only used if factor_fun in forward is None
