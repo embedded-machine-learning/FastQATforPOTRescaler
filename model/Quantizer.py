@@ -53,18 +53,25 @@ def FakeQuant(
     #         x = x.data.div(delta_in, rounding_mode=rounding_mode).clamp_(min_quant, max_quant)
     # return x
     with torch.no_grad():
-        if training:
-            x.data.div_(delta_in)
-        else:
-            x = x.data.div(delta_in)
+        if rounding_mode!='floor_div':
+            if training:
+                x.data.div_(delta_in)
+            else:
+                x = x.data.div(delta_in)
 
-        if rounding_mode=='floor':
-            x.data.floor_()
-        elif rounding_mode=='trunc':
-            x.data.trunc_()
-        else:#rounding_mode=='round':
-            x.data.round_()
-            # x.data = (x.data + torch.rand_like(x.data)).floor()
+            if rounding_mode=='floor':
+                x.data.floor_()
+            elif rounding_mode=='trunc':
+                x.data.trunc_()
+            else:#rounding_mode=='round':
+                x.data.round_()
+                # x.data = (x.data + torch.rand_like(x.data)).floor()
+        else:
+            if training:
+                x.data.div_(delta_in,rounding_mode='floor')
+            else:
+                x = x.data.div(delta_in,rounding_mode='floor')
+
         if clamp:
             x.data.clamp_(min_quant, max_quant)
         

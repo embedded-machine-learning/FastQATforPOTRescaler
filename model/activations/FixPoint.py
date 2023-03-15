@@ -17,15 +17,13 @@ class FixPoint(Quant):
     :type size: tuple, optional
     """
 
-    def __init__(self, bits, size=(-1,), fixpoint=4, rounding_mode: str = "floor", use_enforced_quant_level: bool = False) -> None:
+    def __init__(self, bits, size=(-1,), rounding_mode: str = "floor", use_enforced_quant_level: bool = False, fixpoint=4) -> None:
         super(FixPoint, self).__init__(bits, size, rounding_mode, use_enforced_quant_level)
         self.bits = bits
         self.take_new = True
         self.fixpoint = fixpoint
         assert self.bits > 0
-        assert use_enforced_quant_level == False
-        # as defined by f8net
-        
+        assert use_enforced_quant_level == False        
 
         nn.init.constant_(self.min, -2**(bits-1))
         nn.init.constant_(self.max, 2**(bits-1) - 1)

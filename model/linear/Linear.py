@@ -102,19 +102,19 @@ class Linear(nn.Linear):
         self.test = {}
 
         
-    # def int_extract(self, accumulation_type = torch.int32, small_signed_type = torch.int8, small_unsigned_type=torch.uint8) -> Linear_int:
-    #     return Linear_int(
-    #         self.in_features,
-    #         self.out_features,
-    #         self.quant_weight,
-    #         self.n,
-    #         self.t if self.bias is not None else None,
-    #         self.out_quant.min,
-    #         self.out_quant.max,
-    #         accumulation_type = accumulation_type,
-    #         small_signed_type = small_signed_type,
-    #         small_unsigned_type = small_unsigned_type,
-    #     )
+    def int_extract(self, accumulation_type = torch.int32, small_signed_type = torch.int8, small_unsigned_type=torch.uint8) -> Linear_int:
+        return Linear_int(
+            self.in_features,
+            self.out_features,
+            self.quant_weight,
+            self.down_scaler.right_shift,
+            self.down_scaler.integer_bias if self.down_scaler.integer_bias is not None else None,
+            self.down_scaler.out_quant.min,
+            self.down_scaler.out_quant.max,
+            accumulation_type = accumulation_type,
+            small_signed_type = small_signed_type,
+            small_unsigned_type = small_unsigned_type,
+        )
 
 
     @logger_forward

@@ -25,9 +25,9 @@ from .functions import calculate_alpha, calculate_alpha_fixed, calculate_n, calc
 NAME_INDEX = 0
 
 
-class BatchNorm2d(torch.nn.BatchNorm2d):
+class BatchNorm1d(torch.nn.BatchNorm1d):
     """
-    BatchNorm2d Modified nn.BatchNorm2d
+    BatchNorm1d Modified nn.BatchNorm1d
 
     Modified to create a convolution weight adaptation factor and calculate the eval BN as a addition and shift
 
@@ -76,10 +76,17 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         Please read the class help
         """
 
-        super(BatchNorm2d, self).__init__(num_features, eps, momentum, affine, track_running_stats, device, dtype)
+        # affine is always True as we require the parameters to be present, however they are set to be untrainable
+        super(BatchNorm1d, self).__init__(num_features, eps, momentum, True, track_running_stats, device, dtype)
+        
+        self.affine = affine
+        if not affine:
+            self.weight.requires_grad_(False)
+            self.bias.requires_grad_(False)
 
-        self.register_buffer("n", torch.zeros(1, num_features, 1, 1))
-        self.register_buffer("t", torch.zeros(1, num_features, 1, 1))
+
+        self.register_buffer("n", torch.zeros(1, num_features))
+        self.register_buffer("t", torch.zeros(1, num_features))
         self.register_buffer("alpha", 1.0 / np.sqrt(2.0) * torch.ones(num_features))
 
         self.func_t = calculate_t
@@ -94,7 +101,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         if out_quant_args == None:
             out_quant_args = (
                 8,
-                (1, num_features, 1, 1),
+                (1, num_features),
             )
 
         if out_quant == None:
@@ -146,7 +153,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         else:
             quant = self.out_quant
 
-        x = super(BatchNorm2d, self).forward(x)
+        x = super(BatchNorm1d, self).forward(x)
         x = quant(x, False, input)
 
         rexp = torch.log2(quant.delta_out)
@@ -170,7 +177,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                 var=self.running_var.view(-1),
                 out_quant=quant.delta_out.view(-1),
                 rexp=rexp.view(-1),
-            ).detach().view(1, -1, 1, 1)
+            ).detach().view(1, -1)
 
             t = self.func_t(
                 weight=self.weight.view(-1),
@@ -182,7 +189,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
                 n=self.n.view(-1),
             ).detach()
 
-            # tmp = torch.exp2(self.n.view(1, -1, 1, 1))
+            # tmp = torch.exp2(self.n.view(1, -1))
 
             def mul_pow2(a:torch.Tensor,exp:torch.Tensor):
                 mantissa, exponent = torch.frexp(a)
@@ -191,9 +198,9 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
 
 
             # self.t = (t.view(1, -1, 1, 1)).div(tmp).floor()
-            self.t = mul_pow2(t.view(1,-1,1,1),-self.n.view(1,-1,1,1)).floor()
+            self.t = mul_pow2(t.view(1,-1),-self.n.view(1,-1)).floor()
             x = x + self.t
-            x = mul_pow2(x,self.n.view(1,-1,1,1))
+            x = mul_pow2(x,self.n.view(1,-1))
             # x = x.mul(tmp)
 
             x = x.floor()
