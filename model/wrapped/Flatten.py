@@ -31,6 +31,23 @@ class FlattenM_int(nn.Module):
     @logger_forward
     def forward(self, x: Tensor) -> Tensor:
         return x.flatten(self.dim)
+    
+    def onnx_export(self, node_list, input_name, input_zero_point, idx=0):
+        import onnx
+        import onnx.numpy_helper
+        import onnx.onnx_ml_pb2
+        import onnx.helper as hel
+
+        node = onnx.helper.make_node(
+            "Flatten",
+            axis=1,
+            inputs=[input_name],
+            outputs=[f'output_{idx}'],  # Default value for axis: axis=1
+        )
+
+        node_list.append(node)
+        return node_list, f'output_{idx}', input_zero_point, idx+1
+
 
 
 class FlattenM(nn.Module):

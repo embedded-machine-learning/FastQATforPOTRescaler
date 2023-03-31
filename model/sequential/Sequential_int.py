@@ -5,7 +5,7 @@ from torch import nn
 class Sequential_int(nn.Sequential):
     def onnx_export(self, node_list, input_name, input_zero_point, idx=0):
         for module in self:
-            if module.onnx_export is not None:
+            if callable(getattr(module, 'onnx_export', None)):
                 print('layer eported')
                 node_list, input_name, input_zero_point, idx = module.onnx_export(node_list, input_name, input_zero_point, idx)
             else:

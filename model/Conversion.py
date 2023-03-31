@@ -56,13 +56,14 @@ class Start(nn.Module):
 
     @logger_init
     def __init__(
-        self, bits: int = 8, size: Tuple[int] = (1,), mode: Optional[str] = "auto", auto_runs: int = 2
+        self, bits: int = 8, size: Tuple[int] = (1,), mode: Optional[str] = "auto", auto_runs: int = 2, inline:bool=False
     ) -> None:
         """
         Please read Class help
         """
         super(Start, self).__init__()
         self.size = size
+        self.inline=inline
         self.register_buffer(
             "bits", (bits) * torch.ones(size, dtype=torch.float))
         self.register_buffer("delta_in", torch.clone(
@@ -170,7 +171,7 @@ class Start(nn.Module):
 
         return DataWrapper(
             FakeQuant(
-                x = x.clone(),
+                x = x if self.inline else x.clone(),
                 delta_in = self.delta_in,
                 delta_out = self.delta_out,
                 training = self.training,

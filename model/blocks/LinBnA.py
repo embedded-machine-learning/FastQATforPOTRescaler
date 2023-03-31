@@ -13,6 +13,8 @@ from ..linear import Linear
 from ..batchnorm import BatchNorm1d
 from ..activations import ReLU
 
+from .LinBnA_int import LinBnA_int
+
 
 class LinBnA(nn.Module):
     """
@@ -66,7 +68,7 @@ class LinBnA(nn.Module):
     @logger_init
     def __init__(
         self,
-        # Convolution
+        # Linear
         in_features: int,
         out_features: int,
         weight_quant=None,
@@ -132,6 +134,24 @@ class LinBnA(nn.Module):
             self.activation = ReLU(*activation_args, **activation_kargs)
         else:
             self.activation = activation(*activation_args, **activation_kargs)
+
+    def int_extract(
+        self, accumulation_type=torch.int32, small_signed_type=torch.int8, small_unsigned_type=torch.uint8
+    ):
+        return LinBnA_int(
+            self.lin.in_features,
+            self.lin.out_features,
+            self.lin.quant_weight,
+            self.bn.n,
+            self.bn.t,
+            self.activation.min,
+            self.activation.max,
+            accumulation_type=accumulation_type,
+            small_signed_type=small_signed_type,
+            small_unsigned_type=small_unsigned_type,
+        )
+    
+
 
     @logger_forward
     def forward(self, x: DataWrapper) -> DataWrapper:

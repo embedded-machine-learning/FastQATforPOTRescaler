@@ -17,7 +17,7 @@ class ReLU(Quant):
     :type size: tuple, optional
     """
 
-    def __init__(self, bits, size=(-1,), mom1=0.1, rounding_mode: str = "floor", use_enforced_quant_level: bool = False) -> None:
+    def __init__(self, bits, size=(-1,), rounding_mode: str = "floor", use_enforced_quant_level: bool = False, mom1: int  = 0.1) -> None:
         super(ReLU, self).__init__(bits, size, rounding_mode, use_enforced_quant_level)
         self.bits = bits
         if size == (-1,):

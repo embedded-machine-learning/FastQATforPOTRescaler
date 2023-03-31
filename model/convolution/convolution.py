@@ -139,8 +139,7 @@ class Conv2d(nn.Conv2d):
         self.down_scaler = DownScaler((1, out_channels, 1, 1), out_quant=out_quant,
                                       out_quant_args=out_quant_args, out_quant_kargs=out_quant_kargs)
 
-        self.register_buffer("rexp_diff", torch.zeros(
-            (1, in_channels, 1, 1) if self.layer_wise else (in_channels)))
+        self.register_buffer("rexp_diff", torch.zeros((1, in_channels, 1, 1)))
 
         self.test = {}
 

@@ -100,7 +100,7 @@ class ConvBnA_int(nn.Module):
             x = x.to(self.small_signed_type)
         return x
 
-    def onnx_export(self, node_list, input_name, input_zero_point, idx=0):
+    def onnx_export_old(self, node_list, input_name, input_zero_point, idx=0):
         import onnx
         import onnx.numpy_helper
         import onnx.onnx_ml_pb2
@@ -109,20 +109,21 @@ class ConvBnA_int(nn.Module):
         eq_mul = self.n_eq_mult.cpu().detach().view(-1).numpy()
         y_scale = (np.max(1/eq_mul)).astype(np.float32)
         w_scale = (eq_mul*y_scale).astype(np.float32)
+        w_zero_point = (np.int8(0)*np.ones_like(w_scale)).astype(np.int8)
 
         B = (self.t.cpu().detach().view(-1).numpy())/w_scale
 
         conversions = {
-            f'w_{idx}': (self.Conv.weight.cpu().detach().numpy()+128).astype(np.uint8),
+            f'w_{idx}': (self.Conv.weight.cpu().detach().numpy()).astype(np.int8),
             f'x_scale_{idx}': np.float32(1),
             f'w_scale_{idx}': w_scale,
             f'y_scale_{idx}': y_scale,
             f'x_zero_point_{idx}': input_zero_point,
-            f'w_zero_point_{idx}': np.uint8(128),
+            f'w_zero_point_{idx}': w_zero_point,
             f'y_zero_point_{idx}': np.uint8(0) if self.pure_positive else np.uint8(128),
-            f'B_{idx}': B.astype(np.int32),
-            f'min_{idx}': (self.min.cpu().detach().view(-1).numpy() + (np.uint8(0) if self.pure_positive else np.uint8(128))).astype(np.uint8),
-            f'max_{idx}': (self.max.cpu().detach().view(-1).numpy() + (np.uint8(0) if self.pure_positive else np.uint8(128))).astype(np.uint8),
+            f'B_{idx}': B.astype(np.int32).reshape(-1),
+            f'min_{idx}': (self.min.cpu().detach().numpy() + (np.uint8(0) if self.pure_positive else np.uint8(128))).astype(np.uint8),
+            f'max_{idx}': (self.max.cpu().detach().numpy() + (np.uint8(0) if self.pure_positive else np.uint8(128))).astype(np.uint8),
         }
 
         this_node_list = []       # just here to debug
@@ -138,10 +139,15 @@ class ConvBnA_int(nn.Module):
                                                     dims=value.shape,
                                                     vals=value.flatten()))
             )
+        pads = [0,0,0,0]
+        if self.Conv.padding.lower() == 'same':
+            pads = [self.Conv.kernel_size[_%2]//2 for _ in range(4)]
 
         node = hel.make_node(
             "QLinearConv",
             name=f'QLinearConv_{idx}',
+            pads=pads,
+            strides=list(self.Conv.stride),
             inputs=[
                 input_name,
                 f'x_scale_{idx}',
@@ -153,18 +159,199 @@ class ConvBnA_int(nn.Module):
                 f'y_zero_point_{idx}',
                 f'B_{idx}',
             ],
-            outputs=[f'internal_output_{idx}'],
+            # outputs=[f'output_{idx}'],
+            outputs=[f'internal_output_2_{idx}'],
+            # outputs=[f'internal_output_1_{idx}'],
         )
 
         this_node_list.append(node)
 
-        node = onnx.helper.make_node(
-            "Clip",
-            inputs=[f'internal_output_{idx}', f'min_{idx}', f'max_{idx}'],
+        # node = onnx.helper.make_node(
+        #     "Max",
+        #     name=f'Max_{idx}',
+        #     inputs=[f'internal_output_1_{idx}', f'min_{idx}'],
+        #     outputs=[f'internal_output_2_{idx}'],
+        # )
+        # this_node_list.append(node)
+        
+        node = hel.make_node(
+            "Min",
+            name=f'Min_{idx}',
+            inputs=[f'max_{idx}', f'internal_output_2_{idx}'],
             outputs=[f'output_{idx}'],
         )
-
         this_node_list.append(node)
 
         node_list = node_list + this_node_list
         return node_list, f'output_{idx}', np.uint8(0) if self.pure_positive else np.uint8(128), idx+1
+    
+
+    def onnx_export(self, node_list, input_name, input_zero_point, idx=0):
+        import onnx
+        import onnx.numpy_helper
+        import onnx.onnx_ml_pb2
+        import onnx.helper as hel
+
+        eq_mul = self.n_eq_mult.cpu().detach().view(-1).numpy()
+        # y_scale = (np.max(1/eq_mul)).astype(np.float32)
+        y_scale = ((1/eq_mul)).astype(np.float32)
+        # w_scale = (eq_mul*y_scale).astype(np.float32)
+        w_scale = np.float32(1)
+        w_zero_point = (np.int8(0)*np.ones_like(w_scale)).astype(np.int8)
+
+        B = (self.t.cpu().detach().view(-1).numpy().astype(np.float32))/w_scale
+
+        conversions = {
+            f'w_{idx}': (self.Conv.weight.cpu().detach().numpy()).astype(np.int8),
+            f'x_scale_{idx}': np.float32(1),
+            f'w_scale_{idx}': w_scale,
+            f'y_scale_{idx}': y_scale,
+            f'x_zero_point_{idx}': input_zero_point,
+            f'w_zero_point_{idx}': w_zero_point,
+            f'y_zero_point_{idx}': np.zeros_like(y_scale).astype(np.int8 if self.pure_positive else np.int8),
+            f'B_{idx}': B.astype(np.float32),
+            f'B_scale_{idx}': (y_scale/w_scale).astype(np.float32),
+            f'B_zero_point_{idx}': np.zeros_like(w_scale).astype(np.int8),
+            f'min_{idx}': (self.min.cpu().detach().numpy()*y_scale).astype(np.float32),
+            f'max_{idx}': (self.max.cpu().detach().numpy()*y_scale).astype(np.float32),
+            f'max_scale_{idx}': np.float32(1),
+            f'max_zero_point_{idx}': np.uint8(0).astype(np.uint8 if self.pure_positive else np.int8),
+        }
+
+        this_node_list = []       # just here to debug
+
+        for name, value in conversions.items():
+            value2 = onnx.numpy_helper.from_array(value)
+            value2: onnx.onnx_ml_pb2.TensorProto
+            # print(value2)
+            this_node_list.append(
+                hel.make_node('Constant', inputs=[], outputs=[name], name=(name + '_const'),
+                              value=hel.make_tensor(name=name + '_1',
+                                                    data_type=value2.data_type,
+                                                    dims=value.shape,
+                                                    vals=value.flatten()))
+            )
+        pads = [0,0,0,0]
+        if self.Conv.padding.lower() == 'same':
+            pads = [self.Conv.kernel_size[_%2]//2 for _ in range(4)]
+
+
+        
+        node = hel.make_node(
+            "DequantizeLinear",
+            inputs=[input_name, f'x_scale_{idx}', f'x_zero_point_{idx}'],
+            axis=1,
+            outputs=[f'input_{idx}_f'],
+        )
+        this_node_list.append(node)
+
+
+
+        node = hel.make_node(
+            "DequantizeLinear",
+            inputs=[f'w_{idx}', f'w_scale_{idx}', f'w_zero_point_{idx}'],
+            axis=0,
+            outputs=[f'w_{idx}_f'],
+        )
+        this_node_list.append(node)
+
+        # node = hel.make_node(
+        #     "DequantizeLinear",
+        #     inputs=[f'B_{idx}', f'B_scale_{idx}', f'B_zero_point_{idx}'],
+        #     axis=1,
+        #     outputs=[f'B_{idx}_f'],
+        # )
+        # this_node_list.append(node)
+
+        node = hel.make_node(
+            "Conv",
+            inputs=[f'input_{idx}_f', f'w_{idx}_f', f'B_{idx}'],
+            # outputs=[f'internal_output_1_{idx}_f'],
+            outputs=[f'output_{idx}_f'],
+            pads=pads,
+            strides=list(self.Conv.stride),
+            kernel_shape=list(self.Conv.kernel_size),
+            # Default values for other attributes: strides=[1, 1], dilations=[1, 1], groups=1
+        )
+
+        this_node_list.append(node)
+
+
+        # node = onnx.helper.make_node(
+        #     "Max",
+        #     name=f'Max_{idx}',
+        #     inputs=[f'internal_output_1_{idx}_f', f'min_{idx}'],
+        #     outputs=[f'internal_output_2_{idx}_f'],
+        # )
+        # this_node_list.append(node)
+
+        # node = hel.make_node(
+        #     "Min",
+        #     name=f'Min_{idx}',
+        #     inputs=[f'internal_output_2_{idx}_f',f'max_{idx}'],
+        #     outputs=[f'output_{idx}_f'],
+        # )
+        # this_node_list.append(node)
+
+
+        node = hel.make_node(
+            "QuantizeLinear",
+            inputs=[f'output_{idx}_f', f'y_scale_{idx}', f'y_zero_point_{idx}'],
+            # inputs=[f'internal_output_1_{idx}_f', f'y_scale_{idx}', f'y_zero_point_{idx}'],
+            axis=1,
+            outputs=[f'output_{idx}'],
+            # outputs=[f'internal_output_1_{idx}'],
+        )
+        this_node_list.append(node)
+
+        # node = hel.make_node(
+        #     "DequantizeLinear",
+        #     inputs=[f'internal_output_1_{idx}', f'max_scale_{idx}', f'max_zero_point_{idx}'],
+        #     outputs=[f'internal_output_1_{idx}_f_2'],
+        # )
+        # this_node_list.append(node)
+
+        # # node = hel.make_node(
+        # #     "DequantizeLinear",
+        # #     inputs=[f'min_{idx}', f'max_scale_{idx}', f'max_zero_point_{idx}'],
+        # #     outputs=[f'min_{idx}_f'],
+        # # )
+        # # this_node_list.append(node)
+
+        # node = hel.make_node(
+        #     "QuantizeLinear",
+        #     inputs=[f'internal_output_2_{idx}_f',  f'max_scale_{idx}',f'y_zero_point_{idx}'],
+        #     # outputs=[f'output_{idx}'],
+        #     outputs=[f'internal_output_2_{idx}'],
+        # )
+        # this_node_list.append(node)
+
+
+
+        # node = hel.make_node(
+        #     "DequantizeLinear",
+        #     inputs=[f'internal_output_2_{idx}', f'max_scale_{idx}', f'max_zero_point_{idx}'],
+        #     outputs=[f'internal_output_2_{idx}_f_2'],
+        # )
+        # this_node_list.append(node)
+
+        # # node = hel.make_node(
+        # #     "DequantizeLinear",
+        # #     inputs=[f'max_{idx}', f'max_scale_{idx}', f'max_zero_point_{idx}'],
+        # #     outputs=[f'max_{idx}_f'],
+        # # )
+        # # this_node_list.append(node)
+        
+
+
+        # node = hel.make_node(
+        #     "QuantizeLinear",
+        #     inputs=[f'output_{idx}_f',  f'max_scale_{idx}',f'y_zero_point_{idx}'],
+        #     # outputs=[f'output_{idx}'],
+        #     outputs=[f'output_{idx}'],
+        # )
+        # this_node_list.append(node)
+
+
+        node_list = node_list + this_node_list
+        return node_list, f'output_{idx}', np.int8(0) if self.pure_positive else np.int8(0), idx+1

@@ -42,6 +42,24 @@ class MaxPool2d_int(nn.MaxPool2d):
     def forward(self, input: Tensor):
         return super(MaxPool2d_int, self).forward(input.to(torch.float)).to(input.dtype)
 
+    def onnx_export(self, node_list, input_name, input_zero_point, idx=0):
+        import onnx
+        import onnx.numpy_helper
+        import onnx.onnx_ml_pb2
+        import onnx.helper as hel
+
+        node = onnx.helper.make_node(
+            "MaxPool",
+            inputs=[input_name],
+            outputs=[f'output_{idx}'],
+            kernel_shape=[self.kernel_size, self.kernel_size],
+            strides=[self.stride, self.stride],
+            pads=[self.padding,self.padding,self.padding,self.padding]
+        )
+
+        node_list.append(node)
+        return node_list, f'output_{idx}', input_zero_point, idx+1
+
 
 class MaxPool2d(nn.MaxPool2d):
     """
