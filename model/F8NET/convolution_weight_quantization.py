@@ -35,6 +35,10 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
 
             self.delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
 
+            # clipping the weights, improves performance
+            x.data.clamp_(self.delta_for_quant*(self.min-0.4),
+                          self.delta_for_quant*(self.max+0.4))
+
         return (
             FakeQuant(
                 x=x.clone(),

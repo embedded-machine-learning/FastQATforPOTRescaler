@@ -114,9 +114,11 @@ class Conv2d(nn.Conv2d):
                 weight_quant_bits,
                 (-1,) if not weight_quant_channel_wise else (out_channels, 1, 1, 1),
                 "round",
+                groups == in_channels
             )
 
         self.layer_wise = groups == in_channels
+        # print(self.layer_wise,groups,in_channels)
 
         if weight_quant == None:
             self.weight_quant = LinQuantWeight(

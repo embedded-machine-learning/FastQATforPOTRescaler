@@ -83,6 +83,7 @@ class LinBnA(nn.Module):
         affine: bool = True,
         track_running_stats: bool = True,
         fixed_n: bool = False,
+        BN_shift_alpha_function=None,
         # Activation
         activation: Optional[Quant] = None,
         activation_args=None,
@@ -126,6 +127,7 @@ class LinBnA(nn.Module):
             out_quant=None,
             out_quant_args=None,
             out_quant_kargs={},
+            shift_alpha_function=BN_shift_alpha_function,
         )
 
         if activation_args is None:

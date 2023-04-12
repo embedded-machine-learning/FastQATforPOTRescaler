@@ -4,21 +4,18 @@ from torch.nn.common_types import Tensor
 from ..logger import logger_forward
 
 @logger_forward
-def calculate_n(
+def calculate_n_a(
     weight: Tensor,
-    bias: Tensor,
     mean: Tensor,
     var: Tensor,
     out_quant: Tensor,
     rexp: Tensor,
-) -> Tensor:
+):
     """
-    calculate_n calculates the shift factor
+    calculate_n calculates the shift factor and alpha value
 
     :param weight: The absolute of the weight vector
     :type weight: Tensor
-    :param bias: The bias of the BN
-    :type bias: Tensor
     :param mean: The mean of the BN
     :type mean: Tensor
     :param var: The variance of the BN
@@ -32,25 +29,24 @@ def calculate_n(
     """
     with torch.no_grad():
         n = torch.log2(weight.abs() / (out_quant * torch.sqrt(var + 1e-5))) + rexp.view(-1)
-        n = n.ceil()
-        return n
+        nr = n.ceil()
+        alpha = torch.sign(weight) * torch.exp2(n - nr)
+        return nr, alpha
+
 
 @logger_forward
-def calculate_n_fixed(
+def calculate_n_a_fixed(
     weight: Tensor,
-    bias: Tensor,
     mean: Tensor,
     var: Tensor,
     out_quant: Tensor,
     rexp: Tensor,
-) -> Tensor:
+):
     """
-    calculate_n calculates the shift factor for a whole layer
+    calculate_n calculates the shift factor and alpha value for a whole layer
 
     :param weight: The absolute of the weight vector
     :type weight: Tensor
-    :param bias: The bias of the BN
-    :type bias: Tensor
     :param mean: The mean of the BN
     :type mean: Tensor
     :param var: The variance of the BN
@@ -67,7 +63,9 @@ def calculate_n_fixed(
         # nr = n.max() * torch.ones_like(n)
         nr = n.median() * torch.ones_like(n)
         nr = nr.ceil()
-        return nr
+        nr = torch.ceil(nr)
+        alpha = torch.sign(weight) * torch.exp2(n - nr)
+        return nr, alpha
 
 @logger_forward
 def calculate_t(
@@ -100,67 +98,4 @@ def calculate_t(
     with torch.no_grad():
         t = -mean * (weight / (out_quant * torch.sqrt(var + 1e-5))) + bias / out_quant
         return t
-
-
-@logger_forward
-def calculate_alpha(
-    weight: torch.Tensor,
-    mean: torch.Tensor,
-    var: torch.Tensor,
-    out_quant: torch.Tensor,
-    rexp: torch.Tensor,
-) -> torch.Tensor:
-    """
-    calculate_alpha calculates the adaptation factor for the weights
-
-    :param weight: The absolute of the weight vector
-    :type weight: Tensor
-    :param mean: The mean of the BN
-    :type mean: Tensor
-    :param var: The variance of the BN
-    :type var: Tensor
-    :param out_quant: The out quantization factor
-    :type out_quant: Tensor
-    :param rexp: The input exponent
-    :type rexp: Tensor
-    :return: The adaptation factor
-    :rtype: torch.Tensor
-    """
-    with torch.no_grad():
-        n = torch.log2(weight.abs() / (out_quant * torch.sqrt(var + 1e-5))) + rexp.view(-1)
-        nr = torch.ceil(n)
-        alpha = torch.sign(weight) * torch.exp2(n - nr)
-    return alpha
-
-@logger_forward
-def calculate_alpha_fixed(
-    weight: torch.Tensor,
-    mean: torch.Tensor,
-    var: torch.Tensor,
-    out_quant: torch.Tensor,
-    rexp: torch.Tensor,
-) -> torch.Tensor:
-    """
-    calculate_alpha calculates the adaptation factor for the weights for a fixed n
-
-    :param weight: The absolute of the weight vector
-    :type weight: Tensor
-    :param mean: The mean of the BN
-    :type mean: Tensor
-    :param var: The variance of the BN
-    :type var: Tensor
-    :param out_quant: The out quantization factor
-    :type out_quant: Tensor
-    :param rexp: The input exponent
-    :type rexp: Tensor
-    :return: The adaptation factor
-    :rtype: torch.Tensor
-    """
-    with torch.no_grad():
-        n = torch.log2(weight.abs() / (out_quant * torch.sqrt(var + 1e-5))) + rexp.view(-1)
-        nr = n.median() * torch.ones_like(n)
-        nr = torch.ceil(nr)
-        alpha = torch.sign(weight) * torch.exp2(n - nr)
-
-    return alpha
 

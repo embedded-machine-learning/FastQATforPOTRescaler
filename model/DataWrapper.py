@@ -114,5 +114,5 @@ class DataWrapper:
         """
         if self.quant_val is None:
             return x
-        print(x.shape,self.quant_val.shape)
+        # print(x.shape,self.quant_val.shape)
         return x.div(self.quant_val).log2().round().exp2().mul(self.quant_val)

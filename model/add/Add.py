@@ -63,7 +63,7 @@ class Add(nn.Module):
             quant = self.out_quant
 
         if a[0].shape != b[0].shape:
-            raise torch.ErrorReport("ADD: input shapes not identical")
+            raise torch.ErrorReport("ADD: input shapes not identical", a[0].shape, b[0].shape)
         if self.training:
             out = a[0] + b[0]
             out = quant(out, __HIGH_PRES__, in_a)

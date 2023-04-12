@@ -20,7 +20,7 @@ from .. import (
 from .. import __TESTING_FLAGS__
 
 
-from .functions import calculate_alpha, calculate_alpha_fixed, calculate_n, calculate_n_fixed, calculate_t
+from .functions import calculate_n_a, calculate_n_a_fixed, calculate_t
 
 NAME_INDEX = 0
 
@@ -71,6 +71,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         out_quant=None,
         out_quant_args=None,
         out_quant_kargs={},
+        shift_alpha_function=None,
     ):
         """
         Please read the class help
@@ -90,11 +91,12 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         self.func_t = calculate_t
         self.fixed_n = fixed_n
         if fixed_n:
-            self.func_n = calculate_n_fixed
-            self.func_a = calculate_alpha_fixed
+            self.func_n_a = calculate_n_a_fixed
         else:
-            self.func_n = calculate_n
-            self.func_a = calculate_alpha
+            self.func_n_a = calculate_n_a
+
+        if shift_alpha_function is not None:
+            self.func_n_a = shift_alpha_function
 
         if out_quant_args == None:
             out_quant_args = (
@@ -123,7 +125,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         """
 
         def ret_fun(rexp):
-            self.alpha = self.func_a(
+            _,self.alpha = self.func_n_a(
                 weight=self.weight.view(-1).detach(),
                 mean=self.running_mean.view(-1).detach(),
                 var=self.running_var.view(-1).detach(),
@@ -151,7 +153,14 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         else:
             quant = self.out_quant
 
+        if __TESTING_FLAGS__['FREEZE_BN']:
+            self.eval()
+            self.weight.requires_grad = False
+            self.bias.requires_grad = False
         x = super(BatchNorm2d, self).forward(x)
+        if __TESTING_FLAGS__['FREEZE_BN']:
+            self.train()
+
         x = quant(x, False, input)
 
         rexp = torch.log2(quant.delta_out)
@@ -168,14 +177,15 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             quant = self.out_quant
 
         with torch.no_grad():
-            self.n = self.func_n(
+            n,_ = self.func_n_a(
                 weight=self.weight.view(-1),
-                bias=self.bias.view(-1),
                 mean=self.running_mean.view(-1),
                 var=self.running_var.view(-1),
                 out_quant=quant.delta_out.view(-1),
                 rexp=rexp.view(-1),
-            ).detach().view(1, -1, 1, 1)
+            )
+
+            self.n = n.detach().view(1, -1, 1, 1)
 
             t = self.func_t(
                 weight=self.weight.view(-1),
