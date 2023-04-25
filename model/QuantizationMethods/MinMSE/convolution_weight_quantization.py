@@ -3,6 +3,7 @@ from torch.nn.common_types import Tensor
 
 from types import FunctionType
 from typing import Tuple
+import numpy as np
 
 from ...Quantizer import FakeQuant
 
@@ -12,12 +13,12 @@ from ...convolution.weight_quantization import LinQuantWeight
 from ...logger import logger_init, logger_forward
 
 
-class LinQuantWeight_mod_F8NET(LinQuantWeight):
+class LinQuantWeight_mod_MinMSE(LinQuantWeight):
     @logger_init
     def __init__(self, bits: int = 8, size: tuple = (-1,), rounding_mode: str = "round", layer_wise=False) -> None:
-        super().__init__(bits, size, rounding_mode,layer_wise)
-        self.register_buffer("delta_in_factor", torch.tensor(1.0 / 40.0))
-        self.register_buffer("delta_out_factor", torch.tensor(1.0 / 40.0))
+        super(LinQuantWeight_mod_MinMSE,self).__init__(bits, size, rounding_mode,layer_wise)
+        self.register_buffer("delta_in_factor", torch.tensor(3.347*np.exp(-0.5739*bits)))
+        self.register_buffer("delta_out_factor", torch.tensor(3.347*np.exp(-0.5739*bits)))
 
     @logger_forward
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:

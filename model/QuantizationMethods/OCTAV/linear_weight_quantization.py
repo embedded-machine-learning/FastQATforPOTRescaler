@@ -31,12 +31,15 @@ class LinQuantWeight_mod_OCTAV(LinQuantWeight):
         with torch.no_grad():
             x_d = x * (rexp_diff.view(*self.rexp_view))
             new_s = self.s_it(x_d)
-            # counter = 0
+            counter = 0
             while ((new_s-self.s).abs()/(self.s.abs())>1e-5).any():     # itterate until relavive distance is less than 1e-5
                 # print(self.s.view(-1)[:5])
                 self.s = new_s
                 new_s =self.s_it(x_d)
-                # counter += 1 
+                counter += 1 
+                if counter > 1000:
+                    print("OCTAV counter overflow exiting Linear", new_s[(new_s-self.s).abs()/(self.s.abs())>1e-5].view(-1)) 
+                    break
             self.s = new_s
             # print(counter)
             
@@ -46,8 +49,8 @@ class LinQuantWeight_mod_OCTAV(LinQuantWeight):
             fact = fact_fun((self.delta_out.view(1,-1) * rexp_mean).log2()).view(-1, 1)
             self.delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
 
-            x.data.clamp_(self.delta_for_quant*(self.min-0.5),
-                          self.delta_for_quant*(self.max+0.5))
+            # x.data.clamp_(self.delta_for_quant*(self.min-0.5),
+            #               self.delta_for_quant*(self.max+0.5))
 
         return (
             FakeQuant(
