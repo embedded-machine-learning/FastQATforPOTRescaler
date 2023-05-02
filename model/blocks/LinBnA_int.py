@@ -186,7 +186,7 @@ class LinBnA_int(nn.Module):
         B = (self.t.cpu().detach().view(-1).numpy())/w_scale
 
         conversions = {
-            f'b_{idx}': (self.Lin.weight.cpu().detach().numpy()).astype(np.int8).T,
+            f'b_{idx}': (self.Lin.weight.cpu().detach().numpy()).astype(np.int8),
             f'a_scale_{idx}': np.float32(1),
             f'b_scale_{idx}': w_scale,
             f'y_scale_{idx}': y_scale,
@@ -235,6 +235,8 @@ class LinBnA_int(nn.Module):
         node = hel.make_node(
             "Gemm",
             name=f'Gemm_{idx}',
+            transB=0,
+            transA=0,
             inputs=[
                 f'{input_name}_f',
                 f'b_{idx}_f',

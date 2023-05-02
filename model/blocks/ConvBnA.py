@@ -183,10 +183,10 @@ class ConvBnA(nn.Module):
         )
 
     @logger_forward
-    def forward(self, x: DataWrapper) -> DataWrapper:
+    def forward(self, x: DataWrapper, train_fused_function=None) -> DataWrapper:
 
         fact = self.bn.get_weight_factor()
         x = self.conv(x, fact)
-        x = self.bn(x, self.activation)
+        x = self.bn(x, self.activation, train_fused_function)
 
         return x
