@@ -128,7 +128,7 @@ class Hidden_ReLU(Quant):
 class RELU_back_function(torch.autograd.Function):
     @staticmethod
     def forward(ctx, val: Tensor) -> Tensor:
-        ctx.save_for_backward(val > 0)
+        ctx.save_for_backward(val >= 0)
         return val.clone()
 
     @staticmethod

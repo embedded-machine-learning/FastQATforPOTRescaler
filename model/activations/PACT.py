@@ -9,6 +9,7 @@ from ..DataWrapper import DataWrapper
 from ..logger import logger_init, logger_forward
 from ..Quantizer import Quant
 
+from .. import __TESTING_FLAGS__
 
 class PACT(Quant):
     """
@@ -38,24 +39,28 @@ class PACT(Quant):
     @logger_forward
     def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None):
         if self.training:
-            with torch.no_grad():
-                self.alpha : torch.nn.Parameter     # just to get auto complete
-                self.alpha.data.clamp_(min=1e-3)    # block 2 small and negative alpha
-                
-                # abs = self.alpha_used.log2().ceil().exp2()
-                # self.delta_in = self.alpha.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
-                # self.delta_out = self.alpha.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
-                self.delta_in = self.alpha.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
-                self.delta_out = self.alpha.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
-                if self.use_enforced_quant_level and metadata is not None:
-                    self.use_quant(metadata)
-                if self.use_enforced_quant_level and metadata is None:
-                    raise ValueError("Quantization function desired but metadata not passed")
-                
+            if not __TESTING_FLAGS__['FREEZE_QUANT']:
+                with torch.no_grad():
+                    self.alpha : torch.nn.Parameter     # just to get auto complete
+                    self.alpha.data.clamp_(min=1e-3)    # block 2 small and negative alpha
+                    
+                    # abs = self.alpha_used.log2().ceil().exp2()
+                    # self.delta_in = self.alpha.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
+                    # self.delta_out = self.alpha.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
+                    self.delta_in = self.alpha.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
+                    self.delta_out = self.alpha.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
+                    if self.use_enforced_quant_level and metadata is not None:
+                        self.use_quant(metadata)
+                    if self.use_enforced_quant_level and metadata is None:
+                        raise ValueError("Quantization function desired but metadata not passed")
+                    
 
-                self.max = self.alpha.div(self.delta_in).round().clamp(self.min,self.max_helper)
+                    self.max = self.alpha.div(self.delta_in).round().clamp(self.min,self.max_helper)
 
-            x = PACT_back_function.apply(x, self.alpha)
+                x = PACT_back_function.apply(x, self.alpha)
+            else:
+                self.alpha.requires_grad_(False)
+                x = PACT_back_function.apply(x, self.alpha.detach().clone())
         return super(PACT,self).forward(x, fake)
 
 

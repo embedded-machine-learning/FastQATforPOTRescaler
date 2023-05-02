@@ -20,7 +20,7 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
         self.register_buffer("delta_out_factor", torch.tensor(1.0 / 40.0))
         
     @logger_forward
-    def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tensor:
         with torch.no_grad():
             sigma = (
                 torch.var(x * (rexp_diff.view(1, -1)), self.reduce_list, unbiased=False, keepdim=True).add(1e-5).sqrt()
@@ -35,8 +35,7 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
             x.data.clamp_(self.delta_for_quant*(self.min-0.5),
                           self.delta_for_quant*(self.max+0.5))
 
-        return (
-            FakeQuant(
+        return FakeQuant(
                 x=x.clone(),
                 delta_in=self.delta_for_quant ,
                 delta_out=self.delta_for_quant ,
@@ -44,6 +43,4 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
                 min_quant=self.min,
                 max_quant=self.max,
                 rounding_mode=self.rounding_mode,
-            ),
-            fact,
-        )
+            )

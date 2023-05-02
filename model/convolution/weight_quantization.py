@@ -6,6 +6,7 @@ from torch.nn.common_types import Tensor
 
 from ..Quantizer import Quant,FakeQuant
 from ..logger import logger_forward,logger_init
+from .. import __TESTING_FLAGS__
 
 
 class LinQuantWeight(Quant):
@@ -51,7 +52,7 @@ class LinQuantWeight(Quant):
         self.delta_for_quant = None
 
     @logger_forward
-    def forward(self, weight: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
+    def forward(self, weight: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tensor:
         """
         forward Does the quantization, if :cvar:`self.training` returns floats else ints
 
@@ -68,19 +69,19 @@ class LinQuantWeight(Quant):
         :return: Returns the Quantized weights and the scaling factor for debug purposes
         :rtype: tuple[Tensor,Tensor]
         """
-        with torch.no_grad():
-            abs_value = self.get_abs(weight * (rexp_diff.view(*self.rexp_view)))
+        if not __TESTING_FLAGS__['FREEZE_QUANT']:
+            with torch.no_grad():
+                abs_value = self.get_abs(weight * (rexp_diff.view(*self.rexp_view)))
 
-            self.abs = abs_value.detach()
-            self.delta_in = self.abs.mul(self.delta_in_factor).detach()
-            self.delta_out = self.abs.mul(self.delta_out_factor).detach()
+                self.abs = abs_value.detach()
+                self.delta_in = self.abs.mul(self.delta_in_factor).detach()
+                self.delta_out = self.abs.mul(self.delta_out_factor).detach()
 
-            fact = fact_fun((self.delta_out.view(1, -1, 1, 1) * rexp_mean).log2()).view(-1, 1, 1, 1)
+                fact = fact_fun((self.delta_out.view(1, -1, 1, 1) * rexp_mean).log2()).view(-1, 1, 1, 1)
 
-            self.delta_for_quant = self.delta_in / ((rexp_diff.view(*self.rexp_view) * fact))
+                self.delta_for_quant = self.delta_in / ((rexp_diff.view(*self.rexp_view) * fact))
 
-        return (
-            FakeQuant(
+        return FakeQuant(
                 x=weight.clone(),
                 delta_in=self.delta_for_quant,
                 delta_out=self.delta_for_quant,
@@ -88,6 +89,4 @@ class LinQuantWeight(Quant):
                 min_quant=self.min,
                 max_quant=self.max,
                 rounding_mode=self.rounding_mode,
-            ),
-            fact,
-        )
+            )

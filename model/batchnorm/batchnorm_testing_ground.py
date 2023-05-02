@@ -11,7 +11,7 @@ from ..logger import logger_init, logger_forward
 
 from ..DataWrapper import DataWrapper
 
-from .batchnorm import BatchNorm2d
+from .batchnorm2d import BatchNorm2d
 
 from .. import (
     __DEBUG__,

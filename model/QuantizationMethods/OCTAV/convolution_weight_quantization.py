@@ -29,7 +29,7 @@ class LinQuantWeight_mod_OCTAV(LinQuantWeight):
             return ((x_a*gr_s).sum(self.reduce_list, keepdim=True))/((4**(-self.bits)/3)*(gr_z & ~gr_s).sum(self.reduce_list, keepdim=True) + gr_s.sum(self.reduce_list, keepdim=True))
 
     @logger_forward
-    def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tensor:
         with torch.no_grad():
             x_d = x * (rexp_diff.view(*self.rexp_view))
             new_s = self.s_it(x_d)
@@ -56,8 +56,7 @@ class LinQuantWeight_mod_OCTAV(LinQuantWeight):
             # x.data.clamp_(self.delta_for_quant*(self.min-0.5),
             #               self.delta_for_quant*(self.max+0.5))
 
-        return (
-            FakeQuant(
+        return FakeQuant(
                 x=x.clone(),
                 delta_in=self.delta_for_quant,
                 delta_out=self.delta_for_quant,
@@ -65,6 +64,4 @@ class LinQuantWeight_mod_OCTAV(LinQuantWeight):
                 min_quant=self.min,
                 max_quant=self.max,
                 rounding_mode=self.rounding_mode,
-            ),
-            fact,
-        )
+            )

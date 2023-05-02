@@ -180,7 +180,7 @@ class Conv2d(nn.Conv2d):
 
         weight_function = self.down_scaler.get_weight_function()
 
-        weight, fact = self.weight_quant(
+        weight = self.weight_quant(
             self.weight,
             rexp_mean.exp2(),
             self.rexp_diff.exp2(),
@@ -213,7 +213,7 @@ class Conv2d(nn.Conv2d):
             rexp_mean = torch.mean(rexp)
             self.rexp_diff = rexp - rexp_mean
 
-        weight, fact = self.weight_quant(
+        weight = self.weight_quant(
             self.weight,
             rexp_mean.exp2(),
             self.rexp_diff.exp2(),

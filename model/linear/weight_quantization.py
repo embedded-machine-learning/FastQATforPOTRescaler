@@ -8,6 +8,8 @@ from torch.nn.common_types import Tensor
 from ..Quantizer import Quant,FakeQuant
 from ..logger import logger_init,logger_forward
 
+from .. import __TESTING_FLAGS__
+
 
 class LinQuantWeight(Quant):
     """
@@ -50,7 +52,7 @@ class LinQuantWeight(Quant):
         self.register_buffer("min", torch.tensor(-(2 ** (self.bits - 1) - 1)))
 
     @logger_forward
-    def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tensor:
         """
         forward Does the quantization, if :cvar:`self.training` returns floats else ints
 
@@ -67,17 +69,17 @@ class LinQuantWeight(Quant):
         :return: Returns the Quantized weights and the scaling factor for debug purposes
         :rtype: tuple[Tensor,Tensor]
         """
-        with torch.no_grad():
-            abs_val = self.get_abs(x * (rexp_diff.view(1, -1)))
+        if not __TESTING_FLAGS__['FREEZE_QUANT']:
+            with torch.no_grad():
+                abs_val = self.get_abs(x * (rexp_diff.view(1, -1)))
 
-            self.abs = abs_val.detach()
-            self.delta_in = self.abs.mul(self.delta_in_factor).detach()
-            self.delta_out = self.abs.mul(self.delta_out_factor).detach()
+                self.abs = abs_val.detach()
+                self.delta_in = self.abs.mul(self.delta_in_factor).detach()
+                self.delta_out = self.abs.mul(self.delta_out_factor).detach()
 
-            fact = fact_fun((self.delta_out.view(1,-1) * rexp_mean).log2()).view(-1, 1)
+                fact = fact_fun((self.delta_out.view(1,-1) * rexp_mean).log2()).view(-1, 1)
 
-        return (
-            FakeQuant(
+        return FakeQuant(
                 x=x.clone(),
                 delta_in=self.delta_in / ((rexp_diff.view(1, -1) * fact)),
                 delta_out=self.delta_out / ((rexp_diff.view(1, -1) * fact)),
@@ -85,6 +87,4 @@ class LinQuantWeight(Quant):
                 min_quant=self.min,
                 max_quant=self.max,
                 rounding_mode=self.rounding_mode,
-            ),
-            fact,
-        )
+            )

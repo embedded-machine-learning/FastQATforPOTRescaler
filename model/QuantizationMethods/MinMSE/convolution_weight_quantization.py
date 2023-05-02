@@ -12,6 +12,8 @@ from ...convolution.weight_quantization import LinQuantWeight
 
 from ...logger import logger_init, logger_forward
 
+from ... import __TESTING_FLAGS__
+
 
 class LinQuantWeight_mod_MinMSE(LinQuantWeight):
     @logger_init
@@ -21,27 +23,27 @@ class LinQuantWeight_mod_MinMSE(LinQuantWeight):
         self.register_buffer("delta_out_factor", torch.tensor(3.347*np.exp(-0.5739*bits)))
 
     @logger_forward
-    def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tuple[Tensor, Tensor]:
-        with torch.no_grad():
-            sigma = (
-                torch.var(x * (rexp_diff.view(*self.rexp_view)), self.reduce_list, unbiased=False, keepdim=True)
-                .add_(1e-5)
-                .sqrt_()
-            )
+    def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tensor:
+        if not __TESTING_FLAGS__['FREEZE_QUANT']:
+            with torch.no_grad():
+                sigma = (
+                    torch.var(x * (rexp_diff.view(*self.rexp_view)), self.reduce_list, unbiased=False, keepdim=True)
+                    .add_(1e-5)
+                    .sqrt_()
+                )
 
-            self.delta_in = sigma.mul_(self.delta_in_factor)  # delta in and delta out identical
-            self.delta_out.data = self.delta_in
+                self.delta_in = sigma.mul_(self.delta_in_factor)  # delta in and delta out identical
+                self.delta_out.data = self.delta_in
 
-            fact = fact_fun((self.delta_out.view(1,-1,1,1) * rexp_mean).log2()).view(-1, 1, 1, 1)
+                fact = fact_fun((self.delta_out.view(1,-1,1,1) * rexp_mean).log2()).view(-1, 1, 1, 1)
 
-            self.delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
+                self.delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
 
-            # clipping the weights, improves performance
-            x.data.clamp_(self.delta_for_quant*(self.min-0.5),
-                          self.delta_for_quant*(self.max+0.5))
+                # clipping the weights, improves performance
+                x.data.clamp_(self.delta_for_quant*(self.min-0.5),
+                            self.delta_for_quant*(self.max+0.5))
 
-        return (
-            FakeQuant(
+        return FakeQuant(
                 x=x.clone(),
                 delta_in=self.delta_for_quant,
                 delta_out=self.delta_for_quant,
@@ -49,6 +51,4 @@ class LinQuantWeight_mod_MinMSE(LinQuantWeight):
                 min_quant=self.min,
                 max_quant=self.max,
                 rounding_mode=self.rounding_mode,
-            ),
-            fact,
-        )
+            )

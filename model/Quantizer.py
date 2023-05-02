@@ -8,6 +8,7 @@ from torch.nn.common_types import Tensor
 
 from .DataWrapper import DataWrapper
 from .logger import logger_init, logger_forward
+from . import __TESTING_FLAGS__
 
 
 def FakeQuant(
@@ -240,7 +241,7 @@ class LinQuantExpScale(Quant):
 
     @logger_forward
     def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None):
-        if self.training:
+        if self.training and not __TESTING_FLAGS__['FREEZE_QUANT']:
             with torch.no_grad():
                 abs_value = self.get_abs(x)
                 # print(abs)

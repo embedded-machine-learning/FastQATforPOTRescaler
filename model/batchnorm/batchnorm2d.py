@@ -153,13 +153,14 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         else:
             quant = self.out_quant
 
-        if __TESTING_FLAGS__['FREEZE_BN']:
-            self.eval()
+        if __TESTING_FLAGS__['FREEZE_BN'] or  __TESTING_FLAGS__['FREEZE_QUANT']:
             self.weight.requires_grad = False
             self.bias.requires_grad = False
-        x = super(BatchNorm2d, self).forward(x)
-        if __TESTING_FLAGS__['FREEZE_BN']:
-            self.train()
+            x = F.batch_norm(x,self.running_mean.detach().clone(),self.running_var.detach().clone(),self.weight.detach().clone(),self.bias.detach().clone(),False,self.momentum,self.eps)
+        
+        else:
+            x = super(BatchNorm2d, self).forward(x)
+
 
         x = quant(x, False, input)
 

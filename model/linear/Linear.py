@@ -146,7 +146,7 @@ class Linear(nn.Linear):
         
         weight_function = self.down_scaler.get_weight_function()
 
-        weight, fact = self.weight_quant(
+        weight = self.weight_quant(
             self.weight,
             rexp_mean.exp2(),
             rexp_diff.exp2(),
@@ -174,7 +174,7 @@ class Linear(nn.Linear):
         rexp_mean = torch.mean(rexp)
         rexp_diff = rexp - rexp_mean
 
-        weight, fact = self.weight_quant(
+        weight = self.weight_quant(
             self.weight,
             rexp_mean.exp2(),
             rexp_diff.exp2(),
