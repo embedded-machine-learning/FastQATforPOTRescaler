@@ -66,7 +66,7 @@ def calculate_n_a_fixed(
         # nr = n.max() * torch.ones_like(n)
         nr = n.median() * torch.ones_like(n)
         nr = torch.round(nr)
-        alpha = torch.sign(weight) * torch.exp2(n - nr)
+        alpha = (torch.sign(weight)+1e-5).sign() * torch.exp2(n - nr)
         return nr, alpha
 
 @logger_forward

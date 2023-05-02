@@ -36,7 +36,7 @@ class PACT(Quant):
         self.register_buffer("max_helper", (2**bits - 1) * torch.ones_like(self.max))
 
     @logger_forward
-    def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None):
+    def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None,*args,**kargs):
         if self.training:
             with torch.no_grad():
                 self.alpha : torch.nn.Parameter     # just to get auto complete
@@ -62,7 +62,7 @@ class PACT(Quant):
 class PACT_back_function(torch.autograd.Function):
     @staticmethod
     def forward(ctx, val: Tensor, alpha: Tensor) -> Tensor:
-        ctx.save_for_backward(val >= alpha, val > 0)
+        ctx.save_for_backward(val >= alpha, val >= 0)
         return val.clone()
 
     @staticmethod

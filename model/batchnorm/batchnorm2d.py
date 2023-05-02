@@ -137,14 +137,14 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         return ret_fun
 
     @logger_forward
-    def forward(self, input: DataWrapper, activation: Union[None, nn.Module] = None, conv=None) -> DataWrapper:
+    def forward(self, input: DataWrapper, activation: Union[None, nn.Module] = None,  train_fused_function=None) -> DataWrapper:
 
         if not self.training:
             return self.forward_eval(input, activation)
-        return self.forward_train_fast(input, activation)
+        return self.forward_train_fast(input, activation, train_fused_function)
 
     @logger_forward
-    def forward_train_fast(self, input: DataWrapper, activation: Union[None, nn.Module] = None):
+    def forward_train_fast(self, input: DataWrapper, activation: Union[None, nn.Module] = None, train_fused_function=None):
         x, rexp = input.get()
 
         if activation != None:
@@ -161,7 +161,10 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         if __TESTING_FLAGS__['FREEZE_BN']:
             self.train()
 
-        x = quant(x, False, input)
+        if train_fused_function is not None:
+            x = train_fused_function(x)
+
+        x = quant(x, False, input, var=self.weight.detach() if train_fused_function is None else None)
 
         rexp = torch.log2(quant.delta_out)
         return input.set(x, rexp)

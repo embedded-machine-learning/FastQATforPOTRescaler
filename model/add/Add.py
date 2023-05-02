@@ -67,24 +67,16 @@ class Add(nn.Module):
             raise torch.ErrorReport("ADD: input shapes not identical", a[0].shape, b[0].shape)
         if self.training:
             out = a[0] + b[0]
-            out = quant(out, __HIGH_PRES__, in_a)
+            out = quant(out, False, in_a)
             rexp = quant.delta_out.log2()
-            if __HIGH_PRES__:
-                with torch.no_grad():
-                    va = a[0].div(rexp.exp2()).floor()
-                    vb = b[0].div(rexp.exp2()).floor()
-                    out2 = va + vb
-                    out2 = out2.clamp(quant.min, quant.max)
-                    out2 = out2.mul(rexp.exp2())
-                out.data = out2
         else:
             rexp = quant.delta_out.log2()
-            self.a_shift = (a[1] - rexp).detach()
-            self.b_shift = (b[1] - rexp).detach()
-            va = a[0].mul(self.a_shift.exp2()).floor()
-            vb = b[0].mul(self.b_shift.exp2()).floor()
+            self.a_shift = (a[1] - rexp).detach().round()
+            self.b_shift = (b[1] - rexp).detach().round()
+            va = a[0].mul(self.a_shift.exp2())
+            vb = b[0].mul(self.b_shift.exp2())
             out = va + vb
-            out = out.clamp(quant.min, quant.max)
+            out = out.floor().clamp(quant.min, quant.max)
 
         return in_a.set(out, rexp)
 
@@ -128,7 +120,7 @@ class Hidden_ReLU(Quant):
 class RELU_back_function(torch.autograd.Function):
     @staticmethod
     def forward(ctx, val: Tensor) -> Tensor:
-        ctx.save_for_backward(val > 0)
+        ctx.save_for_backward(val >= 0)
         return val.clone()
 
     @staticmethod
@@ -188,23 +180,15 @@ class AddRELU(nn.Module):
         if self.training:
             out = a[0] + b[0]
             quant.set_quant(a[1], b[1])
-            out = quant(out, __HIGH_PRES__, in_a)
+            out = quant(out, False, in_a)
             rexp = quant.delta_out.log2()
-            if __HIGH_PRES__:
-                with torch.no_grad():
-                    va = a[0].div(rexp.exp2()).floor()
-                    vb = b[0].div(rexp.exp2()).floor()
-                    out2 = va + vb
-                    out2 = out2.clamp(quant.min, quant.max)
-                    out2 = out2.mul(rexp.exp2())
-                out.data = out2
         else:
             rexp = quant.delta_out.log2()
-            self.a_shift = (a[1] - rexp).detach()
-            self.b_shift = (b[1] - rexp).detach()
-            va = a[0].mul(self.a_shift.exp2()).floor()
-            vb = b[0].mul(self.b_shift.exp2()).floor()
+            self.a_shift = (a[1] - rexp).detach().round()
+            self.b_shift = (b[1] - rexp).detach().round()
+            va = a[0].mul(self.a_shift.exp2())
+            vb = b[0].mul(self.b_shift.exp2())
             out = va + vb
-            out = out.clamp(quant.min, quant.max)
+            out = out.floor().clamp(quant.min, quant.max)
 
         return in_a.set(out, rexp)
