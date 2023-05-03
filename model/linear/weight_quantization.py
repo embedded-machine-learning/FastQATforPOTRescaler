@@ -69,15 +69,15 @@ class LinQuantWeight(Quant):
         :return: Returns the Quantized weights and the scaling factor for debug purposes
         :rtype: tuple[Tensor,Tensor]
         """
-        if not __TESTING_FLAGS__['FREEZE_QUANT']:
-            with torch.no_grad():
+        with torch.no_grad():
+            if not __TESTING_FLAGS__['FREEZE_QUANT']:
                 abs_val = self.get_abs(x * (rexp_diff.view(1, -1)))
 
                 self.abs = abs_val.detach()
-                self.delta_in = self.abs.mul(self.delta_in_factor).detach()
-                self.delta_out = self.abs.mul(self.delta_out_factor).detach()
+            self.delta_in = self.abs.mul(self.delta_in_factor).detach()
+            self.delta_out = self.abs.mul(self.delta_out_factor).detach()
 
-                fact = fact_fun((self.delta_out.view(1,-1) * rexp_mean).log2()).view(-1, 1)
+            fact = fact_fun((self.delta_out.view(1,-1) * rexp_mean).log2()).view(-1, 1)
 
         return FakeQuant(
                 x=x.clone(),

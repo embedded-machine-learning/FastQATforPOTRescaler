@@ -21,17 +21,23 @@ class LinQuantWeight_mod_MinMSE(LinQuantWeight):
         super(LinQuantWeight_mod_MinMSE,self).__init__(bits, size, rounding_mode)
         self.register_buffer("delta_in_factor", torch.tensor(3.347*np.exp(-0.5739*bits)))
         self.register_buffer("delta_out_factor", torch.tensor(3.347*np.exp(-0.5739*bits)))
+
+        if size == (-1,):
+            self.register_buffer("sigma", torch.ones(1))
+        else:
+            self.register_buffer("sigma", torch.ones(size))
         
     @logger_forward
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tensor:
-        # if not __TESTING_FLAGS__['FREEZE_QUANT']:
         with torch.no_grad():
-            sigma = (
-                torch.var(x * (rexp_diff.view(1, -1)), self.reduce_list, unbiased=False, keepdim=True).add(1e-5).sqrt()
-            )
+            if not __TESTING_FLAGS__['FREEZE_QUANT']:
+                sigma = (
+                    torch.var(x * (rexp_diff.view(1, -1)), self.reduce_list, unbiased=False, keepdim=True).add(1e-5).sqrt()
+                )
+                self.sigma = sigma
 
-            self.delta_in = sigma.mul(self.delta_in_factor)
-            self.delta_out = sigma.mul(self.delta_in_factor)
+            self.delta_in = self.sigma.mul(self.delta_in_factor)
+            self.delta_out = self.sigma.mul(self.delta_in_factor)
 
             fact = fact_fun((self.delta_out.view(1,-1) * rexp_mean).log2()).view(-1, 1)
             self.delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)

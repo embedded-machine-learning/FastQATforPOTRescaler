@@ -22,26 +22,32 @@ class LinQuantWeight_mod_MinMSE(LinQuantWeight):
         self.register_buffer("delta_in_factor", torch.tensor(3.347*np.exp(-0.5739*bits)))
         self.register_buffer("delta_out_factor", torch.tensor(3.347*np.exp(-0.5739*bits)))
 
+        if size == (-1,):
+            self.register_buffer("sigma", torch.ones(1))
+        else:
+            self.register_buffer("sigma", torch.ones(size))
+
     @logger_forward
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tensor:
-        if not __TESTING_FLAGS__['FREEZE_QUANT']:
-            with torch.no_grad():
+        with torch.no_grad():
+            if not __TESTING_FLAGS__['FREEZE_QUANT']:
                 sigma = (
                     torch.var(x * (rexp_diff.view(*self.rexp_view)), self.reduce_list, unbiased=False, keepdim=True)
                     .add_(1e-5)
                     .sqrt_()
                 )
+                self.sigma = sigma
 
-                self.delta_in = sigma.mul_(self.delta_in_factor)  # delta in and delta out identical
-                self.delta_out.data = self.delta_in
+            self.delta_in = self.sigma.mul_(self.delta_in_factor)  # delta in and delta out identical
+            self.delta_out.data = self.delta_in
 
-                fact = fact_fun((self.delta_out.view(1,-1,1,1) * rexp_mean).log2()).view(-1, 1, 1, 1)
+            fact = fact_fun((self.delta_out.view(1,-1,1,1) * rexp_mean).log2()).view(-1, 1, 1, 1)
 
-                self.delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
+            self.delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
 
-                # clipping the weights, improves performance
-                x.data.clamp_(self.delta_for_quant*(self.min-0.5),
-                            self.delta_for_quant*(self.max+0.5))
+            # clipping the weights, improves performance
+            x.data.clamp_(self.delta_for_quant*(self.min-0.5),
+                        self.delta_for_quant*(self.max+0.5))
 
         return FakeQuant(
                 x=x.clone(),

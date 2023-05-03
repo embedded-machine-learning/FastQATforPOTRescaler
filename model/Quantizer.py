@@ -250,9 +250,9 @@ class LinQuantExpScale(Quant):
                 abs_value = self.abs.log2().ceil().exp2()
                 self.delta_in = abs_value.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()
                 self.delta_out = abs_value.mul(self.delta_out_factor).detach()  # .log2().ceil().exp2()
-                if self.use_enforced_quant_level and metadata is not None:
-                    self.use_quant(metadata)
-                if self.use_enforced_quant_level and metadata is None:
-                    raise ValueError("Quantization function desired but metadata not passed")
+        if self.use_enforced_quant_level and metadata is not None:
+            self.use_quant(metadata)
+        if self.use_enforced_quant_level and metadata is None:
+            raise ValueError("Quantization function desired but metadata not passed")
 
         return super(LinQuantExpScale, self).forward(x, fake)

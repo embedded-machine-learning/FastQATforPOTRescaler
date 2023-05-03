@@ -10,6 +10,7 @@ from ...Quantizer import FakeQuant
 from ...convolution.weight_quantization import LinQuantWeight 
 
 from ...logger import logger_init, logger_forward
+from ... import __TESTING_FLAGS__
 
 
 class LinQuantWeight_mod_F8NET(LinQuantWeight):
@@ -19,16 +20,23 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
         self.register_buffer("delta_in_factor", torch.tensor(1.0 / 40.0))
         self.register_buffer("delta_out_factor", torch.tensor(1.0 / 40.0))
 
+        if size == (-1,):
+            self.register_buffer("sigma", torch.ones(1))
+        else:
+            self.register_buffer("sigma", torch.ones(size))
+
     @logger_forward
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tensor:
         with torch.no_grad():
-            sigma = (
-                torch.var(x * (rexp_diff.view(*self.rexp_view)), self.reduce_list, unbiased=False, keepdim=True)
-                .add_(1e-5)
-                .sqrt_()
-            )
+            if not __TESTING_FLAGS__['FREEZE_QUANT']:
+                sigma = (
+                    torch.var(x * (rexp_diff.view(*self.rexp_view)), self.reduce_list, unbiased=False, keepdim=True)
+                    .add_(1e-5)
+                    .sqrt_()
+                )
+                self.sigma = sigma
 
-            self.delta_in = sigma.mul_(self.delta_in_factor)  # delta in and delta out identical
+            self.delta_in = self.sigma.mul_(self.delta_in_factor)  # delta in and delta out identical
             self.delta_out.data = self.delta_in
 
             fact = fact_fun((self.delta_out.view(1,-1,1,1) * rexp_mean).log2()).view(-1, 1, 1, 1)
@@ -37,7 +45,7 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
 
             # clipping the weights, improves performance
             x.data.clamp_(self.delta_for_quant*(self.min-0.5),
-                          self.delta_for_quant*(self.max+0.5))
+                        self.delta_for_quant*(self.max+0.5))
 
         return FakeQuant(
                 x=x.clone(),
