@@ -165,7 +165,7 @@ class Linear(nn.Linear):
         else:
             bias = None
 
-        return self.down_scaler(input.set(out, rexp_mean + self.weight_quant.delta_out.log2().view(1, -1)),bias.view(1,-1))
+        return self.down_scaler(input.set(out, rexp_mean + self.weight_quant.delta_out.log2().view(1, -1)),bias.view(1,-1) if bias is not None else None)
         
     @logger_forward
     def forward_integrated(self, input: DataWrapper, factor_fun: FunctionType = None) -> torch.Tensor:

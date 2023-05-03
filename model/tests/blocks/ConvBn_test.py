@@ -43,6 +43,7 @@ def test_ConvBn():
 
         x = torch.rand((10,in_channels,123,44))
         x_dw = start(x)
+        x_dw = start(x)
         x_dw : DataWrapper
         out = DUT(x_dw)
         out = DUT(x_dw)

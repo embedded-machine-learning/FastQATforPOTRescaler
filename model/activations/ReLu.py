@@ -34,7 +34,7 @@ class ReLU(Quant):
         nn.init.constant_(self.min, 0)
         nn.init.constant_(self.max, 2**bits - 1)
 
-    def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None):
+    def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None,*args,**kargs):
         if self.training:
             with torch.no_grad():
                 if len(self.size) != len(x.shape):

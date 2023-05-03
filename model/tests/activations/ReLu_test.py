@@ -67,7 +67,7 @@ def test():
     size=(1,100,1,1)
     size_gen=(123,100,165,18)
     for bits in range(1,8):
-        un = ReLU(bits,size,1,'floor',False)
+        un = ReLU(bits,size,'floor',False,1)
         unit(un,size_gen,size,bits)
 
 def test_backprop():
@@ -76,7 +76,7 @@ def test_backprop():
     
     x = (torch.rand(size_gen)*10).clone().detach().requires_grad_(True)
 
-    x_pos = x.detach()>0
+    x_pos = x.detach()>=0
 
     x_back_should_be = x_pos*torch.ones(size_gen)
     

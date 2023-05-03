@@ -240,7 +240,7 @@ class LinQuantExpScale(Quant):
         self.register_buffer("delta_out_factor", torch.tensor(2.0 / (2.0**self.bits - 1)))
 
     @logger_forward
-    def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None):
+    def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None,*args,**kargs):
         if self.training and not __TESTING_FLAGS__['FREEZE_QUANT']:
             with torch.no_grad():
                 abs_value = self.get_abs(x)

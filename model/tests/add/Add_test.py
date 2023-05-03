@@ -39,7 +39,7 @@ def test_basic():
     assert id(a) != id(out)
     assert id(b) != id(out)
 
-    assert torch.isclose((a['value']/2).floor()+(b['value']).floor(),out_ev['value']).all()
+    assert torch.isclose((a['value']/2+b['value']).floor(),out_ev['value']).all()
     assert torch.isclose(out_ev['rexp'],2*torch.ones((1,))).all()
 
 

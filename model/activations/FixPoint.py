@@ -23,7 +23,7 @@ class FixPoint(Quant):
         self.take_new = True
         self.fixpoint = fixpoint
         assert self.bits > 0
-        assert use_enforced_quant_level == False        
+        assert use_enforced_quant_level is False        
 
         nn.init.constant_(self.min, -2**(bits-1))
         nn.init.constant_(self.max, 2**(bits-1) - 1)

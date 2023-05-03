@@ -30,7 +30,7 @@ def calculate_n_a(
     with torch.no_grad():
         n = torch.log2(weight.abs() / (out_quant * torch.sqrt(var + 1e-5)))
         n = torch.nan_to_num(n,nan=0,posinf=0,neginf=-32).add(rexp.view(-1)).clip(min=-32,max=0)
-        nr = n.round()
+        nr = n.ceil()
         alpha = (torch.sign(weight)+1e-5).sign() * torch.exp2(n - nr)
         return nr, alpha
 
@@ -65,7 +65,7 @@ def calculate_n_a_fixed(
         
         # nr = n.max() * torch.ones_like(n)
         nr = n.median() * torch.ones_like(n)
-        nr = torch.round(nr)
+        nr = torch.ceil(nr)
         alpha = (torch.sign(weight)+1e-5).sign() * torch.exp2(n - nr)
         return nr, alpha
 

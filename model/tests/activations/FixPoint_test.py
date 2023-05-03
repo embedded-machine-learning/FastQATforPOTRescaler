@@ -15,5 +15,5 @@ def test():
     size_gen=(1123,23,15,17)
     for bits in range(2,8):
         for fixpoint in range(1,8):
-            fp = FixPoint(bits,size,fixpoint,'floor',False)
+            fp = FixPoint(bits,size,'floor',False,fixpoint)
             unit(fp,size_gen,size,bits,fixpoint)
