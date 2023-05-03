@@ -97,9 +97,11 @@ class Hidden_ReLU(Quant):
     :type size: tuple, optional
     """
 
-    def __init__(self, bits, size=(-1,), rounding_mode: str = "floor", use_enforced_quant_level: bool = False, mom1: int  = 0.1) -> None:
+    def __init__(self, bits, size=(-1,), rounding_mode: str = "floor", use_enforced_quant_level: bool = False, in_min_shifts = [0,0]) -> None:
         super(Hidden_ReLU, self).__init__(bits, size, rounding_mode, use_enforced_quant_level)
         self.bits = bits
+
+        self.in_min_shifts = in_min_shifts
 
         nn.init.constant_(self.min, 0)
         nn.init.constant_(self.max, 2**bits - 1)
@@ -108,7 +110,8 @@ class Hidden_ReLU(Quant):
         with torch.no_grad():
             exp1,exp2 = value1.exp2(), value2.exp2()
             exp = exp1 + exp2
-            exp = exp.div(exp1).log2().clip(min=1).round().exp2().mul(exp1)
+            exp = exp.div(exp1).log2().clip(min=self.in_min_shifts[0]).round().exp2().mul(exp1)
+            exp = exp.div(exp2).log2().clip(min=self.in_min_shifts[1]).round().exp2().mul(exp2)
             self.delta_in = exp
             self.delta_out = exp
 
@@ -154,6 +157,7 @@ class AddRELU(nn.Module):
         out_quant=None,
         out_quant_args=None,
         out_quant_kargs={},
+        in_min_shifts=[0,0],
     ) -> None:
         super(AddRELU, self).__init__()
 
@@ -164,9 +168,10 @@ class AddRELU(nn.Module):
             out_quant_args = (
                 8,
                 size,
+                'floor'
             )
 
-        self.out_quant = Hidden_ReLU(*out_quant_args, **out_quant_kargs)
+        self.out_quant = Hidden_ReLU(*out_quant_args,in_min_shifts=in_min_shifts, **out_quant_kargs)
         
     @logger_forward
     def forward(self, in_a: DataWrapper, in_b: DataWrapper, activation: Union[None, nn.Module] = None) -> DataWrapper:
