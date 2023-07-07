@@ -29,7 +29,11 @@ def calculate_n_a(
     """
     with torch.no_grad():
         n = torch.log2(weight.abs() / (out_quant * torch.sqrt(var + 1e-5)))
+        # n = torch.log2(weight.abs() / (out_quant * torch.sqrt(var)))
         n = torch.nan_to_num(n,nan=0,posinf=0,neginf=-32).add(rexp.view(-1)).clip(min=-32,max=0)
+        # nr = n
+        # alpha = (torch.sign(weight)+1e-5).sign() * torch.exp2(n - nr)
+        # return nr, alpha
         nr = n.ceil()
         alpha = (torch.sign(weight)+1e-5).sign() * torch.exp2(n - nr)
         return nr, alpha

@@ -11,7 +11,7 @@ channels = 101
 def test_DownScaler():
     DUT = DownScaler((1,channels,1,1),out_quant_kargs={'mom1':1})
 
-    start = Start(32,auto_runs=10000)
+    start = Start(32,auto_runs=10000,inline=False)
     stop = Stop((1,channels,1,1))
 
     for i in range(100):
@@ -21,7 +21,7 @@ def test_DownScaler():
         start.train()
         stop.train()
 
-        x = torch.rand((12,channels,12,41))
+        x = torch.rand((12,channels,12,41))-0.5
         x_dw = start(x)
 
         bias = torch.rand((1,channels,1,1))-0.5
@@ -29,12 +29,13 @@ def test_DownScaler():
         out = DUT(x_dw,bias)
         out_val = stop(out)
 
-        should_be = (x+bias).div(DUT.out_quant.delta_out).floor().mul(DUT.out_quant.delta_out)
+        should_be = (x+bias).div(DUT.out_quant.delta_out).floor().clip(min=DUT.out_quant.min, max=DUT.out_quant.max).mul(DUT.out_quant.delta_out)
 
         mask = torch.isclose(out_val,should_be,atol=DUT.out_quant.delta_out.max()/2)
 
         print(out_val[~mask])
-        print((x+bias)[~mask])
+        print(should_be[~mask])
+        print((should_be-out_val)[~mask])
         print(DUT.out_quant.delta_out.view(-1))
 
         assert torch.isclose(out_val,should_be).all()

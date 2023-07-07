@@ -34,14 +34,16 @@ class LinQuantWeight_mod_OCTAV(LinQuantWeight):
             x_d = x * (rexp_diff.view(*self.rexp_view))
             new_s = self.s_it(x_d)
             counter = 0
-            while ((new_s-self.s).abs()/(self.s.abs())>1e-3).any():     # itterate until relavive distance is less than 1e-5
-                # print(self.s.view(-1)[:5])
-                self.s = 0.1*new_s+0.9*self.s
-                new_s =self.s_it(x_d)
-                counter += 1
-                if counter > 1000:
-                    print("OCTAV counter overflow exiting Conv", new_s[(new_s-self.s).abs()/(self.s.abs())>1e-5].view(-1)) 
-                    break
+            mom = 0.0
+            if self.training:
+                while ((new_s-self.s).abs()/(new_s.abs())>1e-3).any():     # itterate until relavive distance is less than 1e-5
+                    # print(self.s.view(-1)[:5])
+                    self.s = (1-mom)*new_s+mom*self.s
+                    new_s =self.s_it(x_d)
+                    counter += 1
+                    if counter > 10:
+                        print("OCTAV counter overflow exiting Conv", new_s[(new_s-self.s).abs()/(self.s.abs())>1e-5].view(-1)) 
+                        break
             # self.s = new_s
             # print(counter)
             

@@ -40,10 +40,9 @@ class PACT(Quant):
     def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None,*args,**kargs):
         if self.training:
             with torch.no_grad():
-                self.alpha : torch.nn.Parameter     # just to get auto complete
                 self.alpha.data.clamp_(min=1e-3)    # block 2 small and negative alpha
                 
-                if not __TESTING_FLAGS__['FREEZE_QUANT']:
+                if __TESTING_FLAGS__['FREEZE_QUANT'] or __TESTING_FLAGS__['FREEZE_ACT_QUANT']:
                     self.alpha.requires_grad_(False)
                 # abs = self.alpha_used.log2().ceil().exp2()
                 # self.delta_in = self.alpha.mul(self.delta_in_factor).detach()  # .log2().ceil().exp2()

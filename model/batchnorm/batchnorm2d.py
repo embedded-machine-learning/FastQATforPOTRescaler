@@ -61,7 +61,8 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
     def __init__(
         self,
         num_features: int,
-        eps: float = 0.00001,
+        eps: float = 1e-5,
+        # eps: float = 0,
         momentum: float = 0.1,
         affine: bool = True,
         track_running_stats: bool = True,
@@ -154,9 +155,9 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             quant = self.out_quant
 
         if __TESTING_FLAGS__['FREEZE_BN'] or  __TESTING_FLAGS__['FREEZE_QUANT']:
-            self.weight.requires_grad = False
-            self.bias.requires_grad = False
-            x = F.batch_norm(x,self.running_mean.detach().clone(),self.running_var.detach().clone(),self.weight.detach().clone(),self.bias.detach().clone(),False,self.momentum,self.eps)
+            self.weight.requires_grad_(False)
+            self.bias.requires_grad_(False)
+            x = F.batch_norm(x,self.running_mean,self.running_var,self.weight,self.bias,False,self.momentum,self.eps)
         
         else:
             x = super(BatchNorm2d, self).forward(x)
@@ -165,7 +166,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
         if train_fused_function is not None:
             x = train_fused_function(x)
 
-        x = quant(x, False, input, var=self.weight.detach() if train_fused_function is None else None)
+        x = quant(x, False, input, var=self.weight.detach() if train_fused_function is None and not (__TESTING_FLAGS__['FREEZE_BN'] or  __TESTING_FLAGS__['FREEZE_QUANT']) else None)
 
         rexp = torch.log2(quant.delta_out)
         return input.set(x, rexp)
@@ -204,6 +205,7 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             # tmp = torch.exp2(self.n.view(1, -1, 1, 1))
 
             def mul_pow2(a:torch.Tensor,exp:torch.Tensor):
+                return a*torch.exp2(exp)
                 mantissa, exponent = torch.frexp(a)
                 exponent += exp.type(torch.int)
                 return torch.ldexp(mantissa,exponent)

@@ -195,6 +195,7 @@ class BatchNorm1d(torch.nn.BatchNorm1d):
             # tmp = torch.exp2(self.n.view(1, -1))
 
             def mul_pow2(a:torch.Tensor,exp:torch.Tensor):
+                return a*torch.exp2(exp)
                 mantissa, exponent = torch.frexp(a)
                 exponent += exp.type(torch.int)
                 return torch.ldexp(mantissa,exponent)

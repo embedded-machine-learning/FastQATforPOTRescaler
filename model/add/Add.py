@@ -106,17 +106,18 @@ class Hidden_ReLU(Quant):
         nn.init.constant_(self.min, 0)
         nn.init.constant_(self.max, 2**bits - 1)
 
+
     def set_quant(self, value1, value2):
         with torch.no_grad():
             exp1,exp2 = value1.exp2(), value2.exp2()
-            exp = exp1 + exp2
+            exp = exp1/(2-self.in_min_shifts[0]) + exp2/(2-self.in_min_shifts[1])
             exp = exp.div(exp1).log2().clip(min=self.in_min_shifts[0]).round().exp2().mul(exp1)
             exp = exp.div(exp2).log2().clip(min=self.in_min_shifts[1]).round().exp2().mul(exp2)
             self.delta_in = exp
             self.delta_out = exp
 
     def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None):
-        x = RELU_back_function.apply(x)
+        x = RELUM_back_function.apply(x,self.max*self.delta_out)
         return super(Hidden_ReLU,self).forward(x, fake)
 
 
@@ -132,6 +133,19 @@ class RELU_back_function(torch.autograd.Function):
         val_gard = grad_outputs * zero_cmp
         return val_gard
 
+
+class RELUM_back_function(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, val: Tensor, max: Tensor) -> Tensor:
+        ctx.save_for_backward(torch.logical_and((val >= 0),~(val >= max)))
+        return val.clone()
+
+    @staticmethod
+    def backward(ctx, grad_outputs: Tensor) -> Tuple[Tensor, Tensor]:
+        cmp, = ctx.saved_tensors
+        val_gard = grad_outputs * cmp
+        # alpha_grad = grad_outputs * alpha_cmp
+        return val_gard, None
 
 
 class AddRELU(nn.Module):
@@ -186,9 +200,11 @@ class AddRELU(nn.Module):
             out = a[0] + b[0]
             quant.set_quant(a[1], b[1])
             out = quant(out, False, in_a)
+
             rexp = quant.delta_out.log2()
-            self.a_shift = (a[1] - rexp).detach().round()
-            self.b_shift = (b[1] - rexp).detach().round()
+            with torch.no_grad():
+                self.a_shift = (a[1] - rexp).detach().round()
+                self.b_shift = (b[1] - rexp).detach().round()
         else:
             rexp = quant.delta_out.log2()
             self.a_shift = (a[1] - rexp).detach().round()

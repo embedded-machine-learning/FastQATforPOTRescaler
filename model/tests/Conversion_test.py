@@ -6,7 +6,7 @@ from ..DataWrapper import DataWrapper
 runs = 1
 
 def test_conversion():
-    DUT_start = Start(8,(1,100,1,1),auto_runs=100000)
+    DUT_start = Start(8,(1,100,1,1),auto_runs=100000,inline=False)
     DUT_stop = Stop((1,100,1,1))
     for i in range(runs):
         x = torch.rand((22,100,231,241))

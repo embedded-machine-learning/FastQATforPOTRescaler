@@ -56,7 +56,7 @@ class Start(nn.Module):
 
     @logger_init
     def __init__(
-        self, bits: int = 8, size: Tuple[int] = (1,), mode: Optional[str] = "auto", auto_runs: int = 2, inline:bool=False
+        self, bits: int = 8, size: Tuple[int] = (1,), mode: Optional[str] = "auto", auto_runs: int = 2, inline:bool=True
     ) -> None:
         """
         Please read Class help

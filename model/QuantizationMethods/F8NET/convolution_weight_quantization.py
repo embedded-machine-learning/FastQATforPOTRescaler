@@ -25,16 +25,18 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
         else:
             self.register_buffer("sigma", torch.ones(size))
 
+        self.first_runs = 50
+
     @logger_forward
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tensor:
         with torch.no_grad():
             if not __TESTING_FLAGS__['FREEZE_QUANT']:
                 sigma = (
                     torch.var(x * (rexp_diff.view(*self.rexp_view)), self.reduce_list, unbiased=False, keepdim=True)
-                    .add_(1e-5)
+                    .add_(1e-20)
                     .sqrt_()
                 )
-                self.sigma = sigma
+                self.sigma.data = sigma.clone()
 
             self.delta_in = self.sigma.mul_(self.delta_in_factor)  # delta in and delta out identical
             self.delta_out.data = self.delta_in
@@ -42,10 +44,13 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
             fact = fact_fun((self.delta_out.view(1,-1,1,1) * rexp_mean).log2()).view(-1, 1, 1, 1)
 
             self.delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
-
+        if self.training:
+            if self.first_runs<0:
             # clipping the weights, improves performance
-            x.data.clamp_(self.delta_for_quant*(self.min-0.5),
-                        self.delta_for_quant*(self.max+0.5))
+                x.data.clamp_(self.delta_for_quant*(self.min-0.5),
+                            self.delta_for_quant*(self.max+0.5))
+            else:
+                self.first_runs -= 1
 
         return FakeQuant(
                 x=x.clone(),

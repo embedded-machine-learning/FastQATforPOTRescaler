@@ -30,5 +30,6 @@ __TESTING_FLAGS__ = {
     'FREEZE_BN': False,
     'FUZE_BN': False,
     'FREEZE_WEIGHT_QUANT': False,
+    'FREEZE_ACT_QUANT': False,
     'FREEZE_QUANT':False,
 }

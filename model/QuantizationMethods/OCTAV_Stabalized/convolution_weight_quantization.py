@@ -1,20 +1,22 @@
 import torch
-import torch.nn as nn
 from torch.nn.common_types import Tensor
 
 from types import FunctionType
 from typing import Tuple
 
 from ...Quantizer import FakeQuant
-from ...linear.weight_quantization import LinQuantWeight
+
+
+from ...convolution.weight_quantization import LinQuantWeight
+
 from ...logger import logger_init, logger_forward
 
 
-
-class LinQuantWeight_mod_OCTAV(LinQuantWeight):
+class LinQuantWeight_mod_OCTAV_Stabalized(LinQuantWeight):
     @logger_init
-    def __init__(self, bits: int = 8, size: tuple = (-1,), rounding_mode: str = "round") -> None:
-        super(LinQuantWeight_mod_OCTAV,self).__init__(bits, size, rounding_mode)
+    def __init__(self, bits: int = 8, size: tuple = (-1,), rounding_mode: str = "round", layer_wise=False) -> None:
+        super(LinQuantWeight_mod_OCTAV_Stabalized,self).__init__(bits, size, rounding_mode, layer_wise)
+
         self.register_buffer('s', torch.ones(size))
 
     @logger_forward
@@ -32,30 +34,34 @@ class LinQuantWeight_mod_OCTAV(LinQuantWeight):
             x_d = x * (rexp_diff.view(*self.rexp_view))
             new_s = self.s_it(x_d)
             counter = 0
-            while ((new_s-self.s).abs()/(self.s.abs())>1e-5).any():     # itterate until relavive distance is less than 1e-5
-                # print(self.s.view(-1)[:5])
-                self.s = new_s
-                new_s =self.s_it(x_d)
-                counter += 1 
-                if counter > 10:
-                    print("OCTAV counter overflow exiting Linear", new_s[(new_s-self.s).abs()/(self.s.abs())>1e-5].view(-1)) 
-                    break
-            self.s = new_s
+            mom = 0.9
+            if self.training:
+                while ((new_s-self.s).abs()/(new_s.abs())>1e-3).any():     # itterate until relavive distance is less than 1e-5
+                    # print(self.s.view(-1)[:5])
+                    self.s = (1-mom)*new_s+mom*self.s
+                    new_s =self.s_it(x_d)
+                    counter += 1
+                    if counter > 1000:
+                        print("OCTAV counter overflow exiting Conv", new_s[(new_s-self.s).abs()/(self.s.abs())>1e-5].view(-1)) 
+                        break
+            # self.s = new_s
             # print(counter)
             
             self.delta_in = self.s/(2**(self.bits-1))
             self.delta_out.data = self.delta_in
 
-            fact = fact_fun((self.delta_out.view(1,-1) * rexp_mean).log2()).view(-1, 1)
+            fact = fact_fun((self.delta_out.view(1,-1,1,1) * rexp_mean).log2()).view(-1, 1, 1, 1)
+
             self.delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
 
+            # clipping the weights, improves performance
             # x.data.clamp_(self.delta_for_quant*(self.min-0.5),
             #               self.delta_for_quant*(self.max+0.5))
 
         return FakeQuant(
                 x=x.clone(),
-                delta_in=self.delta_for_quant ,
-                delta_out=self.delta_for_quant ,
+                delta_in=self.delta_for_quant,
+                delta_out=self.delta_for_quant,
                 training=self.training,
                 min_quant=self.min,
                 max_quant=self.max,
