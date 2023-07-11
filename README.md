@@ -1,3 +1,3 @@
-# EfficientConvBNQuantization
+# Fast QAT for Power Of Two Rescaler
 
-    python train.py --data data/vsc_node.data --batch-size 128 --epochs 200
+There is an example in example/example_*.ipynb

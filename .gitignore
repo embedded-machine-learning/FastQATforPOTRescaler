@@ -1,20 +1,5 @@
-# weights/*
-# out/*
-# runs/*
-
-env
-new_env
-data/MNIST/*
-data/cifar-10-batches-py/*
-data
+.env
 .vscode
-data_training
-data_training_V4.zip
-test_images/*
-test_images
-images_board_last/*
-images_board_last
-images_board_last*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -23,9 +8,6 @@ __pycache__/
 
 # C extensions
 *.so
-loadconversion.py
-loadtest.py
 *.pt
 .VSCodeCounter/*
-
 *.coverage

@@ -112,7 +112,7 @@ class Start(nn.Module):
             self.last_run_train = False
             self.auto_runs -= 1
             print("reduce autorun by 1:", self.auto_runs,
-                  'min/max', self.in_min, '/', self.in_max)
+                  'min/max', self.in_min.item(), '/', self.in_max.item())
         return super().train(mode)
 
     @logger_forward
