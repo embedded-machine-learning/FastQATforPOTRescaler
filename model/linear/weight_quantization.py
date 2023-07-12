@@ -24,7 +24,7 @@ class LinQuantWeight(Quant):
     :type bits: int, optional
     :param size: The shape of the quantization factor (-1,) would be 1 number (<channels>,1) would be a channel-wise quantization, defaults to (-1,)
     :type size: tuple, optional
-    :param rounding_mode: Sets how the values are rounded `https://pytorch.org/docs/stable/generated/torch.div.html`, defaults to "trunc"
+    :param rounding_mode: Sets how the values are rounded `https://pytorch.org/docs/stable/generated/torch.div.html`, defaults to "round"
     :type rounding_mode: str, optional
     """
     @logger_init

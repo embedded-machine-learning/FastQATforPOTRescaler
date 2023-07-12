@@ -65,7 +65,7 @@ class MaxPool2d(nn.MaxPool2d):
     """
     MaxPool2d Wrappes torches nn.MaxPool2d
 
-    _extended_summary_
+    Maxpool stays quantized.
 
     :param kernel_size: The shape of kernel
     :type kernel_size: _size_any_t
@@ -115,7 +115,7 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d):
     AdaptiveAvgPool2d Wrappes nn.AdaptiveAvgPool2d
 
     **IMPORTANT** it also quantizes it to the current quantization level,
-        if implement in HW make sure that this is implemented correctly
+        if implement in HW make sure that this is implemented correctly, or make a custom class
 
     :param output_size: The desired output shape
     :type output_size: _size_any_opt_t
@@ -137,6 +137,6 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d):
                 val.data = val.data.mul_(torch.exp2(rexp))
 
         else:
-            val = val.floor_()
+            val.floor_()
 
         return input.set(val, rexp)

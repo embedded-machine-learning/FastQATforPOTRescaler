@@ -25,7 +25,7 @@ def FakeQuant(
     """
     FakeQuant fake quantizes a Tensor
 
-    fake quantization is quantization, rounding, quantization
+    fake quantization is quantization, rounding, dequantization
 
     :param x: The to fake quantize value
     :type x: Tensor
@@ -149,8 +149,6 @@ class Quant(nn.Module):
     def use_quant(self, metadata: DataWrapper):
         """
         use_quant Uses the factor quantization function of the meta data
-
-        _extended_summary_
 
         :param metadata: The meta data
         :type metadata: DataWrapper

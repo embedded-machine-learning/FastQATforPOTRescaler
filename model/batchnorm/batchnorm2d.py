@@ -111,14 +111,14 @@ class BatchNorm2d(torch.nn.BatchNorm2d):
             self.out_quant = out_quant(*out_quant_args, **out_quant_kargs)
 
         # TODO: Delete
-        global NAME_INDEX
-        self.NAME_INDEX = NAME_INDEX
-        NAME_INDEX += 1
-        self.FILE_NAME = './bn_values/' + str(self.NAME_INDEX)
-        self.counter_max = 1000
-        self.counter = self.counter_max
-        self.STAFFEL = self.NAME_INDEX * 300
-        self.register_buffer('mul_norm', torch.ones_like(self.running_var))
+        # global NAME_INDEX
+        # self.NAME_INDEX = NAME_INDEX
+        # NAME_INDEX += 1
+        # self.FILE_NAME = './bn_values/' + str(self.NAME_INDEX)
+        # self.counter_max = 1000
+        # self.counter = self.counter_max
+        # self.STAFFEL = self.NAME_INDEX * 300
+        # self.register_buffer('mul_norm', torch.ones_like(self.running_var))
 
     def get_weight_factor(self):
         """

@@ -42,7 +42,7 @@ class Start(nn.Module):
     """
     Start Transforms passed values into the quantized/fake quantized domain
 
-    **IMPORTANT** A value domain of [-0.5,0.5] is assumed, fix this of different or force it to that domain
+    mode "auto" detects input range, assumed is symmetric, offset 0, or pure positive.
 
     :param bits: The number of desired bits, defaults to 8
     :type bits: int, optional

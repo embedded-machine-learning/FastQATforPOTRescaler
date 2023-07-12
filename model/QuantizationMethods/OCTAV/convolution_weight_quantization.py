@@ -1,3 +1,6 @@
+# https://proceedings.mlr.press/v162/sakr22a/sakr22a.pdf
+
+
 import torch
 from torch.nn.common_types import Tensor
 

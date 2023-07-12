@@ -7,7 +7,7 @@ from torch.nn.common_types import Tensor
 
 from ..Quantizer import Quant
 from ..DataWrapper import DataWrapper
-
+from ..logger import logger_init, logger_forward
 
 class FixPoint(Quant):
     """
@@ -16,7 +16,7 @@ class FixPoint(Quant):
     :param size: The shape for the quantization, defaults to (1,)
     :type size: tuple, optional
     """
-
+    @logger_init
     def __init__(self, bits, size=(-1,), rounding_mode: str = "floor", use_enforced_quant_level: bool = False, fixpoint=4) -> None:
         super(FixPoint, self).__init__(bits, size, rounding_mode, use_enforced_quant_level)
         self.bits = bits
@@ -35,6 +35,7 @@ class FixPoint(Quant):
         self.register_buffer('min_float',self.min*2**(-fixpoint))
         self.register_buffer('max_float',self.max*2**(-fixpoint))
 
+    @logger_forward
     def forward(self, x: torch.Tensor, fake: bool = False, metadata: Optional[DataWrapper] = None):
         if self.training and fake:
             x = x.clamp(self.min_float,self.max_float)

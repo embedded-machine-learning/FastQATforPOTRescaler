@@ -1,3 +1,6 @@
+# https://arxiv.org/pdf/2202.05239.pdf
+# modified
+
 import torch
 import torch.nn as nn
 from torch.nn.common_types import Tensor

@@ -23,6 +23,17 @@ from .. import __TESTING_FLAGS__
 
 
 class BatchNorm2d_playground(BatchNorm2d):
+    def __init__(self, num_features: int, eps: float = 0.00001, momentum: float = 0.1, affine: bool = True, track_running_stats: bool = True, device=None, dtype=None, fixed_n: bool = False, out_quant=None, out_quant_args=None, out_quant_kargs=..., shift_alpha_function=None):
+        super().__init__(num_features, eps, momentum, affine, track_running_stats, device, dtype, fixed_n, out_quant, out_quant_args, out_quant_kargs, shift_alpha_function)
+        global NAME_INDEX
+        self.NAME_INDEX = NAME_INDEX
+        NAME_INDEX += 1
+        self.FILE_NAME = './bn_values/' + str(self.NAME_INDEX)
+        self.counter_max = 1000
+        self.counter = self.counter_max
+        self.STAFFEL = self.NAME_INDEX * 300
+        self.register_buffer('mul_norm', torch.ones_like(self.running_var))
+
     @logger_forward
     def forward(self, input: DataWrapper, activation: Union[None, nn.Module] = None, conv=None) -> DataWrapper:
 

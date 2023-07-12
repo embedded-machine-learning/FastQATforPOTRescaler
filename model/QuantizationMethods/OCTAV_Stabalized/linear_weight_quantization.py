@@ -1,3 +1,7 @@
+# https://proceedings.mlr.press/v162/sakr22a/sakr22a.pdf
+# is the base, added an EMA filter on top to stabilize,
+#  also increased number of iteration 
+
 import torch
 import torch.nn as nn
 from torch.nn.common_types import Tensor
@@ -34,7 +38,7 @@ class LinQuantWeight_mod_OCTAV_Stabalized(LinQuantWeight):
             counter = 0
             mom = 0.9
             if self.training:
-                while ((new_s-self.s).abs()/(new_s.abs())>1e-3).any():     # itterate until relavive distance is less than 1e-5
+                while ((new_s-self.s).abs()/(new_s.abs())>1e-3).any():     # iterate until relative distance is less than 1e-5
                     # print(self.s.view(-1)[:5])
                     self.s = (1-mom)*new_s+mom*self.s
                     new_s =self.s_it(x_d)
@@ -50,9 +54,6 @@ class LinQuantWeight_mod_OCTAV_Stabalized(LinQuantWeight):
 
             fact = fact_fun((self.delta_out.view(1,-1) * rexp_mean).log2()).view(-1, 1)
             self.delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
-
-            # x.data.clamp_(self.delta_for_quant*(self.min-0.5),
-            #               self.delta_for_quant*(self.max+0.5))
 
         return FakeQuant(
                 x=x.clone(),

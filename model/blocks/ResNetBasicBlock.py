@@ -1,3 +1,5 @@
+# Modified from: https://github.com/lancopku/label-embedding-network/blob/master/ComputerVision/models/resnet8.py
+
 import torch
 import torch.nn as nn
 

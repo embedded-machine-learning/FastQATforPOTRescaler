@@ -1,3 +1,6 @@
+# https://arxiv.org/pdf/2202.05239.pdf
+# modified
+
 import torch
 from torch.nn.common_types import Tensor
 
@@ -25,8 +28,6 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
         else:
             self.register_buffer("sigma", torch.ones(size))
 
-        self.first_runs = 50
-
     @logger_forward
     def forward(self, x: Tensor, rexp_mean: Tensor, rexp_diff: Tensor, fact_fun: FunctionType) -> Tensor:
         with torch.no_grad():
@@ -44,14 +45,11 @@ class LinQuantWeight_mod_F8NET(LinQuantWeight):
             fact = fact_fun((self.delta_out.view(1,-1,1,1) * rexp_mean).log2()).view(-1, 1, 1, 1)
 
             self.delta_for_quant = self.delta_in.div(rexp_diff.view(*self.rexp_view)).div_(fact)
-        if self.training:
-            if self.first_runs<0:
+       
             # clipping the weights, improves performance
-                x.data.clamp_(self.delta_for_quant*(self.min-0.5),
-                            self.delta_for_quant*(self.max+0.5))
-            else:
-                self.first_runs -= 1
-
+            x.data.clamp_(self.delta_for_quant*(self.min-0.5),
+                          self.delta_for_quant*(self.max+0.5))
+          
         return FakeQuant(
                 x=x.clone(),
                 delta_in=self.delta_for_quant,
