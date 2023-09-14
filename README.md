@@ -10,3 +10,7 @@ Rescalers come in different forms, such as full precision multiplication to shif
 
 ## How to use it
 There are examples in ./example , they explain the most important aspects. 
+
+## CITE
+If you use this, please cite us. As the paper is not yet publicly released it will be in the proceedings of DSD2023 under the Title: "Fast, Quantization Aware DNN Training for Efficient HW Implementation", Authors: Daniel Schnoell, Matthias Wess, Matthias Bittner, Maximilian Götzinger and Axel Jantsch. </br>
+As soon as there is an official link we will update this note.

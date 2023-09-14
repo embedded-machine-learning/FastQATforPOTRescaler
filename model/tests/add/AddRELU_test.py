@@ -8,7 +8,7 @@ from ...DataWrapper import DataWrapper
 from ...Conversion import Start,Stop
 
 def test_basic():
-    DUT = AddRELU((1,),out_quant_args=(8,(1,),'floor'))
+    DUT = AddRELU((1,),out_quant_args=(8,(1,),'floor'),in_min_shifts=[1,1])
     DUT.train()
     assert DUT.a_shift.shape == (1,)
     assert DUT.b_shift.shape == (1,)
@@ -35,14 +35,17 @@ def test_basic():
     assert id(a) != id(out)
     assert id(b) != id(out)
 
-    print("a_shift:",DUT.a_shift)
-    print("b_shift:",DUT.b_shift)
-    print(a['value'],b['value'])
-    print(out['value'])
+    # print("a_shift:",DUT.a_shift)
+    # print("b_shift:",DUT.b_shift)
+    # print(a['value'],b['value'])
+    # print(out['value'])
 
     
-    mask = torch.isclose(a_val+b_val,out['value'],atol=2*startb.delta_out.item())
+    mask = torch.isclose(torch.clip(a_val+b_val,min=0),out['value'],atol=2*startb.delta_out.item())
     print("diff:",(torch.clip(a_val+b_val,min=0)-out['value'])[~mask])
+    print("a+b:",(a_val+b_val)[~mask])
+    print("out:",out['value'][~mask])
+    print(torch.sum(~mask))
 
     assert torch.isclose(torch.clip(a_val+b_val,min=0),out['value'],atol=2*startb.delta_out.item()).all()
 
